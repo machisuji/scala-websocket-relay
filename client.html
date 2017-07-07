@@ -1,0 +1,178 @@
+<html>
+<head>
+    <title>WebSocket Relay Server</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <style type="text/css">
+        .header {
+            padding-left: 2em;
+            text-transform: uppercase;
+            background-color: #9966CC;
+            color: #663377;
+        }
+
+        .header h1 {
+            margin: 0
+        }
+
+        .client {
+            background-color: #DDDDDD;
+        }
+
+        .intro {
+            background-color: #CFAFFF;
+        }
+
+        .section {
+            padding: 2em;
+            padding-top: 0.5em;
+            padding-bottom: 0.5em;
+        }
+
+        .column {
+            display: inline-block;
+            border-right: 2px groove #888888;
+            margin-right: 1em;
+            padding-right: 1em;
+        }
+
+        body {
+            margin: 0
+        }
+
+        .code {
+            font-family: monospace;
+            background-color: #DDDDDD;
+            padding: 2px;
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>WebSocket Relay Server</h1>
+</div>
+<div class="intro section">
+    <p>
+        Connects a host with clients through web sockets when the clients cannot connect to the host
+        directly due to firewall restrictions. In this case the clients instead connect to this relay server.
+    </p>
+</div>
+<div class="api section">
+    <h2>API</h2>
+    <ul>
+        <li>
+            <span class="code">GET /</span> - This page
+        </li>
+        <li>
+            <span class="code">GET /session [Upgrade]</span> - WebSocket connection for the host.
+        </li>
+        <li>
+            <span class="code">GET /session/:id [Upgrade]</span> - WebSocket connection for clients.
+            Any messages sent to this socket will be relayed to the host which connected through
+            <span class="code">/session</span> to the session with the given ID.
+        </li>
+    </ul>
+</div>
+<div class="protocol section">
+    <h2>Protocol</h2>
+    <p>
+        There are the following message formats used for the host-to-server communication
+        (<span class="code">/session</span>).
+    </p>
+    <ul>
+        <li>
+            <span class="code">session: &lt;session-id&gt;</span> - Sent as the first message from the relay
+            (this) server to the connecting host to identify the created session. The host has to give this ID to
+            any clients wanting to connect to it.
+        </li>
+        <li>
+            <span class="code">connected: &lt;client-id&gt;</span> - Sent to the host when a client connects
+            to the relay.
+        </li>
+        <li>
+            <span class="code">disconnected: &lt;client-id&gt;</span> - Sent to the host when a client
+            disconnects from the relay.
+        </li>
+        <li>
+            <span class="code">&lt;client-id&gt;: &lt;message&gt;</span> - Message from the host to the client
+            with the given ID or the other way around. Meaning this is the message a host has to send to relay
+            a message to a client and at the same time this is the message a host will receive if a client
+            wants to relay a message to it.
+            Only the <span class="code">&lt;message&gt;</span> part will be sent to the client.
+        </li>
+    </ul>
+    <h3>Client Messages</h3>
+    <p>
+        Messages from clients are relayed as-is to the server listening to the given session.
+    </p>
+</div>
+<div class="client section">
+    <h2>Test</h2>
+    <div class="column">
+        <h3>Host</h3>
+        <p>
+            <input id="host-input" placeholder="Input"></input>
+        </p>
+        <p>
+            <span id="host-output">&nbsp;</span>
+        </p>
+    </div>
+
+    <div class="column">
+        <h3>Client 1</h3>
+        <p>
+            <input id="client-1-input" placeholder="input"></input>
+        </p>
+        <p>
+            <span id="client-1-output">&nbsp;</span>
+        </p>
+    </div>
+</div>
+</body>
+
+<script type="text/javascript">
+    $(document).ready(function() {
+      var socket = new WebSocket("ws://localhost:8080/session");
+
+      socket.onmessage = function(e) {
+        var response = e.data;
+
+        $("#host-output").text(response);
+        console.log("host received message: " + response);
+
+        if (response.startsWith("session:")) {
+          var sessionId = response.split(":")[1].trim();
+          var client = new WebSocket("ws://localhost:8080/session/" + sessionId);
+
+          client.onmessage = function(e) {
+            var message = e.data;
+
+            $("#client-1-output").text(message);
+            console.log("client 1 received message: " + message);
+          };
+
+          client.onclose = function(e) {
+            $("#client-1-output").text("connection failed");
+          };
+
+          $("#client-1-input").change(function() {
+            var message = $(this).val();
+
+            client.send(message);
+            console.log("client 1 sent message: " + message);
+          });
+        }
+      };
+
+      socket.onclose = function(e) {
+        $("#host-output").text("connection failed");
+      };
+
+      $("#host-input").change(function() {
+        var message = $(this).val();
+
+        socket.send(message);
+        console.log("host sent message: " + message);
+      });
+    });
+</script>
+</html>
