@@ -3,9 +3,14 @@
 Connects a host with clients through web sockets when the clients cannot connect to the host
 directly due to firewall restrictions. In this case the clients instead connect to this relay server.
 
+## Requirements
+
+* Java `8`
+* Scala `2.12.2`
+
 ## Build
 
-Built using Scala `2.12.2` with [SBT](http://www.scala-sbt.org/download.html) `0.13.5`.
+Built using [SBT](http://www.scala-sbt.org/download.html) `0.13.5`.
 
 ## Development
 

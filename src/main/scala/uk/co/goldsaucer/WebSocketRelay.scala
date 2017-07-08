@@ -6,13 +6,12 @@ package uk.co.goldsaucer
 
 import akka.NotUsed
 import akka.stream.scaladsl.Sink
-
 import akka.actor.{ActorSystem, PoisonPill, Props}
 import akka.stream.{ActorMaterializer, OverflowStrategy}
 import akka.stream.scaladsl.{Flow, Source}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.ws.UpgradeToWebSocket
-import akka.http.scaladsl.model.ws.{Message}
+import akka.http.scaladsl.model.ws.Message
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.HttpMethods._
 import akka.http.scaladsl.model.ContentTypes.`text/html(UTF-8)`
@@ -20,13 +19,14 @@ import akka.util.Timeout
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
+import scala.util.control.NonFatal
 
 object WebSocketRelay extends App {
   implicit val system = ActorSystem()
   implicit val materializer = ActorMaterializer()
 
   def hostFlow(): Flow[Message, Message, NotUsed] = {
-    val sessionId = scala.util.Random.nextInt(99) + 1
+    val sessionId = java.util.UUID.randomUUID
     val session = system.actorOf(
       Props(new HostConnection(sessionId.toString)),
       s"session:$sessionId"
@@ -50,11 +50,7 @@ object WebSocketRelay extends App {
     import scala.concurrent.ExecutionContext.Implicits.global
 
     val flow = system.actorSelection(s"user/session:$sessionId").resolveOne().map { host =>
-      val clientId = scala.util.Random.nextInt(99) + 1
-      val client = system.actorOf(
-        Props(new ClientConnection(clientId.toString, host)),
-        s"client:$clientId"
-      )
+      val client = system.actorOf(Props(new ClientConnection(host)))
 
       val incomingMessages: Sink[Message, NotUsed] =
         Flow[Message].to(Sink.actorRef[Message](client, PoisonPill))
@@ -89,9 +85,11 @@ object WebSocketRelay extends App {
         case None => HttpResponse(400, entity = "Not a valid websocket request!")
       }
     case req @ HttpRequest(GET, Uri.Path("/"), _, _, _) =>
+      val html = scala.io.Source.fromFile("src/main/resources/index.html").mkString
+
       HttpResponse(
         200,
-        entity = HttpEntity(`text/html(UTF-8)`, scala.io.Source.fromFile("client.html").mkString)
+        entity = HttpEntity(`text/html(UTF-8)`, html)
       )
 
     case r: HttpRequest =>
@@ -102,12 +100,15 @@ object WebSocketRelay extends App {
   val serverBinding = Http().bindAndHandleSync(requestHandler, interface = "0.0.0.0", port = 8080)
 
   def shutdown(): Unit = {
+    println("\nShutting down relay ...")
+
+    Thread.sleep(1000)
+
     import system.dispatcher // for the future transformations
     serverBinding
       .flatMap(_.unbind())
       .onComplete { _ =>
         system.terminate()
-        println("Relay stopped.")
       }
   }
 

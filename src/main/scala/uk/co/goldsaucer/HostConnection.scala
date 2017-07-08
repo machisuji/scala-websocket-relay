@@ -6,7 +6,7 @@ import akka.stream.ActorMaterializer
 
 object HostConnection {
   case class Init(actor: ActorRef)
-  case class Connect(clientId: String)
+  case object Connect
   case class Message(textMessage: TextMessage)
 }
 
@@ -18,7 +18,7 @@ class HostConnection(id: String) extends Actor {
 
   def receive = {
     case HostConnection.Init(actor)               => init(actor)
-    case HostConnection.Connect(clientId)         => clientConnected(clientId, sender())
+    case HostConnection.Connect                   => clientConnected(sender())
     case Terminated(client)                       => clientDisconnected(client)
     case msg: TextMessage                         => messageFromHost(msg)
     case ClientConnection.Message(clientId, msg)  => messageFromClient(clientId, msg)
@@ -30,9 +30,11 @@ class HostConnection(id: String) extends Actor {
     actor ! TextMessage("session: " + id)
   }
 
-  def clientConnected(clientId: String, client: ActorRef): Unit = {
+  def clientConnected(client: ActorRef): Unit = {
+    val clientId = (clients.size + 1).toString
     clients = clients + (clientId -> client)
     context.watch(client) // => receive Terminated on disconnect
+    client ! ClientConnection.SetID(clientId)
     output ! TextMessage(s"connected: $clientId")
   }
 
