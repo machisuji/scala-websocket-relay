@@ -17,6 +17,7 @@ import akka.http.scaladsl.model.ws.Message
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.HttpMethods._
 import akka.http.scaladsl.model.ContentTypes.`text/html(UTF-8)`
+import akka.http.scaladsl.model.Uri.Query
 import akka.util.Timeout
 
 import scala.concurrent.{Await, Future}
@@ -26,11 +27,11 @@ object WebSocketRelay extends App {
   implicit val system = ActorSystem()
   implicit val materializer = ActorMaterializer()
 
-  def hostFlow(): Flow[Message, Message, NotUsed] = {
-    val sessionId = java.util.UUID.randomUUID
+  def hostFlow(sessionId: Option[String] = None): Flow[Message, Message, NotUsed] = {
+    val id = sessionId.getOrElse(java.util.UUID.randomUUID.toString)
     val session = system.actorOf(
-      Props(new HostConnection(sessionId.toString)),
-      s"session:$sessionId"
+      Props(new HostConnection(id)),
+      s"session:$id"
     )
 
     val incomingMessages: Sink[Message, NotUsed] =
@@ -71,8 +72,10 @@ object WebSocketRelay extends App {
 
   val requestHandler: HttpRequest => HttpResponse = {
     case req @ HttpRequest(GET, Uri.Path("/session"), _, _, _) =>
+      val query = Query(req.uri.rawQueryString)
+
       req.header[UpgradeToWebSocket] match {
-        case Some(upgrade) => upgrade.handleMessages(hostFlow())
+        case Some(upgrade) => upgrade.handleMessages(hostFlow(query.get("id")))
         case None          => HttpResponse(400, entity = "Not a valid websocket request!")
       }
     case req @ HttpRequest(GET, uri, _, _, _) if uri.path.toString().startsWith("/session/") =>
@@ -104,7 +107,9 @@ object WebSocketRelay extends App {
       HttpResponse(404, entity = "not found")
   }
 
-  val serverBinding = Http().bindAndHandleSync(requestHandler, interface = "0.0.0.0", port = 8080)
+  val port = sys.env.getOrElse("PORT", "8080").toInt
+
+  val serverBinding = Http().bindAndHandleSync(requestHandler, interface = "0.0.0.0", port = port)
 
   def shutdown(): Unit = {
     println("\nShutting down relay ...")

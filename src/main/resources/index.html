@@ -63,10 +63,12 @@
             <span class="code">GET /</span> - This page
         </li>
         <li>
-            <span class="code">GET /session [Upgrade]</span> - WebSocket connection for the host.
+            <span class="code">GET /session[?id=&lt;id&gt;] {Upgrade}</span> - WebSocket connection for the host.
+            ID is an optional parameter useful when you want to reconnect to the same session.
+            If ommitted a session ID will be generated.
         </li>
         <li>
-            <span class="code">GET /session/:id [Upgrade]</span> - WebSocket connection for clients.
+            <span class="code">GET /session/:id {Upgrade}</span> - WebSocket connection for clients.
             Any messages sent to this socket will be relayed to the host which connected through
             <span class="code">/session</span> to the session with the given ID.
         </li>
@@ -144,7 +146,7 @@
       socket.onmessage = function(e) {
         var response = e.data;
 
-        $("#host-output").text(response);
+        $("#host-output").append(response + "</br>");
         console.log("host received message: " + response);
 
         if (response.startsWith("session:")) {
@@ -154,12 +156,12 @@
           client.onmessage = function(e) {
             var message = e.data;
 
-            $("#client-1-output").text(message);
+            $("#client-1-output").append(message + "</br>");
             console.log("client 1 received message: " + message);
           };
 
           client.onclose = function(e) {
-            $("#client-1-output").text("connection failed");
+            $("#client-1-output").append("connection failed");
           };
 
           $("#client-1-input").change(function() {
@@ -172,7 +174,7 @@
       };
 
       socket.onclose = function(e) {
-        $("#host-output").text("connection failed");
+        $("#host-output").append("connection failed");
       };
 
       $("#host-input").change(function() {
