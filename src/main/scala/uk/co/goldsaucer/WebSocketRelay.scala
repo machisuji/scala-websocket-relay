@@ -4,6 +4,8 @@
 
 package uk.co.goldsaucer
 
+import java.io.File
+
 import akka.NotUsed
 import akka.stream.scaladsl.Sink
 import akka.actor.{ActorSystem, PoisonPill, Props}
@@ -19,7 +21,6 @@ import akka.util.Timeout
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
-import scala.util.control.NonFatal
 
 object WebSocketRelay extends App {
   implicit val system = ActorSystem()
@@ -85,7 +86,13 @@ object WebSocketRelay extends App {
         case None => HttpResponse(400, entity = "Not a valid websocket request!")
       }
     case req @ HttpRequest(GET, Uri.Path("/"), _, _, _) =>
-      val html = scala.io.Source.fromFile("src/main/resources/index.html").mkString
+      val filePath = "src/main/resources/index.html"
+
+      val html =
+        if (new File(filePath).exists())
+          scala.io.Source.fromFile("src/main/resources/index.html").mkString
+        else
+          scala.io.Source.fromInputStream(getClass.getClassLoader.getResourceAsStream("index.html")).mkString
 
       HttpResponse(
         200,
@@ -102,7 +109,7 @@ object WebSocketRelay extends App {
   def shutdown(): Unit = {
     println("\nShutting down relay ...")
 
-    Thread.sleep(1000)
+    Thread.sleep(500)
 
     import system.dispatcher // for the future transformations
     serverBinding
