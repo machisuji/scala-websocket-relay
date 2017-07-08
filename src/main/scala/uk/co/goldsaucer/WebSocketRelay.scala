@@ -23,45 +23,9 @@ import akka.util.Timeout
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 
-object Greeter extends App {
+object WebSocketRelay extends App {
   implicit val system = ActorSystem()
   implicit val materializer = ActorMaterializer()
-
-  //#websocket-handler
-  // The Greeter WebSocket Service expects a "name" per message and
-  // returns a greeting message for that name
-  val greeterWebSocketService =
-    Flow[Message]
-      .mapConcat {
-        // we match but don't actually consume the text message here,
-        // rather we simply stream it back as the tail of the response
-        // this means we might start sending the response even before the
-        // end of the incoming message has been received
-        case tm: TextMessage =>
-          TextMessage(tm.textStream.map(_.toUpperCase)) :: Nil
-        case bm: BinaryMessage =>
-          // ignore binary messages but drain content to avoid the stream being clogged
-          bm.dataStream.runWith(Sink.ignore)
-          Nil
-      }
-  //#websocket-handler
-
-  var message: String = "hallo"
-
-  val source = Source
-    .tick(5 seconds, 3 second, TextMessage("hallo"))
-    .map(_ => TextMessage((new java.util.Date).toString + ": " + message))
-
-  val sink = Sink.foreach[Message] {
-    case tm: TextMessage =>
-      tm.textStream.runForeach(text => message = text)
-    case bm: BinaryMessage =>
-      bm.dataStream.runWith(Sink.ignore)
-  }
-
-  val flow = Flow.fromSinkAndSource(sink, source)
-
-  val chatRoom = system.actorOf(Props(new ChatRoom), "chat")
 
   def hostFlow(): Flow[Message, Message, NotUsed] = {
     val sessionId = scala.util.Random.nextInt(99) + 1
@@ -76,7 +40,7 @@ object Greeter extends App {
     val outgoingMessages: Source[Message, NotUsed] =
       Source.actorRef[Message](10, OverflowStrategy.fail)
         .mapMaterializedValue { outActor =>
-          session ! HostConnection.SetOutput(outActor)
+          session ! HostConnection.Init(outActor)
           NotUsed
         }
 
@@ -100,7 +64,7 @@ object Greeter extends App {
       val outgoingMessages: Source[Message, NotUsed] =
         Source.actorRef[Message](10, OverflowStrategy.fail)
           .mapMaterializedValue { outActor =>
-            client ! ClientConnection.SetOutput(outActor)
+            client ! ClientConnection.Init(outActor)
             NotUsed
           }
 
@@ -110,7 +74,6 @@ object Greeter extends App {
     Await.result(flow.fallbackTo(Future { None }), 1 second)
   }
 
-  //#websocket-request-handling
   val requestHandler: HttpRequest => HttpResponse = {
     case req @ HttpRequest(GET, Uri.Path("/session"), _, _, _) =>
       req.header[UpgradeToWebSocket] match {
@@ -118,8 +81,6 @@ object Greeter extends App {
         case None          => HttpResponse(400, entity = "Not a valid websocket request!")
       }
     case req @ HttpRequest(GET, uri, _, _, _) if uri.path.toString().startsWith("/session/") =>
-      println("session: " + uri.path.toString)
-
       val sessionId = uri.path.toString.substring("/session/".size)
 
       req.header[UpgradeToWebSocket] match {
@@ -136,71 +97,23 @@ object Greeter extends App {
       )
 
     case r: HttpRequest =>
-      r.discardEntityBytes() // important to drain incoming HTTP Entity stream
-      HttpResponse(404, entity = "Unknown resource!")
-  }
-  //#websocket-request-handling
-
-  val bindingFuture =
-    Http().bindAndHandleSync(requestHandler, interface = "localhost", port = 8080)
-
-  println(s"Server online at http://localhost:8080/\nPress RETURN to stop...")
-  StdIn.readLine()
-
-  import system.dispatcher // for the future transformations
-  bindingFuture
-    .flatMap(_.unbind()) // trigger unbinding from the port
-    .onComplete(_ => system.terminate()) // and shutdown when done
-}
-
-object ChatRoom {
-  case object Join
-  case class ChatMessage(message: String)
-}
-
-class ChatRoom extends Actor {
-  import ChatRoom._
-  var users: Set[ActorRef] = Set.empty
-
-  def receive = {
-    case Join =>
-      users += sender()
-      // we also would like to remove the user when its actor is stopped
-      context.watch(sender())
-
-    case Terminated(user) =>
-      users -= user
-
-    case msg: ChatMessage =>
-      users.foreach(_ ! msg)
-  }
-}
-
-object User {
-  case class Connected(out: ActorRef)
-
-  case class IncomingMessage(text: String)
-  case class OutgoingMessage(text: String)
-}
-
-class User(chatRoom: ActorRef) extends Actor {
-  import User._
-
-  def receive = {
-    case Connected(outgoing) =>
-      context.become(connected(outgoing))
+      r.discardEntityBytes()
+      HttpResponse(404, entity = "not found")
   }
 
-  def connected(outgoing: ActorRef): Receive = {
-    chatRoom ! ChatRoom.Join
+  val serverBinding = Http().bindAndHandleSync(requestHandler, interface = "0.0.0.0", port = 8080)
 
-    {
-      case IncomingMessage(text) =>
-        chatRoom ! ChatRoom.ChatMessage(text)
-
-      case ChatRoom.ChatMessage(text) =>
-        outgoing ! OutgoingMessage(text)
-    }
+  def shutdown(): Unit = {
+    import system.dispatcher // for the future transformations
+    serverBinding
+      .flatMap(_.unbind())
+      .onComplete { _ =>
+        system.terminate()
+        println("Relay stopped.")
+      }
   }
 
+  println(s"WebSocket Relay online at http://0.0.0.0:8080/")
+
+  sys.addShutdownHook(shutdown)
 }

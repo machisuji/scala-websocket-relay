@@ -4,30 +4,69 @@ import akka.actor.{Actor, ActorRef, Terminated}
 import akka.http.scaladsl.model.ws.TextMessage
 import akka.stream.ActorMaterializer
 
-import scala.collection.mutable.{Map => MutableMap}
-
 object HostConnection {
-  case class SetOutput(actor: ActorRef)
+  case class Init(actor: ActorRef)
+  case class Connect(clientId: String)
+  case class Message(textMessage: TextMessage)
 }
 
 class HostConnection(id: String) extends Actor {
-  var output: Option[ActorRef] = None
+  protected var output: ActorRef = null
+  protected var clients: Map[String, ActorRef] = Map.empty
+
   implicit val materializer = ActorMaterializer()
 
   def receive = {
-    case HostConnection.SetOutput(actor) =>
-      output = Some(actor)
+    case HostConnection.Init(actor)               => init(actor)
+    case HostConnection.Connect(clientId)         => clientConnected(clientId, sender())
+    case Terminated(client)                       => clientDisconnected(client)
+    case msg: TextMessage                         => messageFromHost(msg)
+    case ClientConnection.Message(clientId, msg)  => messageFromClient(clientId, msg)
+  }
 
-      actor ! TextMessage("session: " + id)
-    case msg: TextMessage =>
-      msg.textStream.runForeach { text =>
-        println("Received message from host: " + text)
-        output.foreach(_ ! (TextMessage("Received: " + text)))
+  def init(actor: ActorRef): Unit = {
+    output = actor
+
+    actor ! TextMessage("session: " + id)
+  }
+
+  def clientConnected(clientId: String, client: ActorRef): Unit = {
+    clients = clients + (clientId -> client)
+    context.watch(client) // => receive Terminated on disconnect
+    output ! TextMessage(s"connected: $clientId")
+  }
+
+  def clientDisconnected(client: ActorRef): Unit = {
+    clients.find(_._2 == client).foreach { case (clientId, client) =>
+      clients = clients.filterKeys(_ != clientId)
+      output ! TextMessage(s"disconnected: $clientId")
+    }
+  }
+
+  def messageFromHost(msg: TextMessage): Unit = {
+    msg.textStream.runForeach { text =>
+      val ToClient = """\A([a-f0-9]+):\s(.+)\Z""".r
+
+      text match {
+        case ToClient(id, message) => messageToClient(id, message)
+        case _ => output ! TextMessage("invalid")
       }
-    case ClientConnection.Message(clientId, msg) =>
-      msg.textStream.runForeach { text =>
-        println(s"Received message from client $clientId: " + text)
-        output.foreach(_ ! (TextMessage(s"$clientId: " + text)))
-      }
+    }
+  }
+
+  def messageToClient(clientId: String, msg: String): Unit = {
+    if (clients.contains(clientId)) {
+      val client = clients(clientId)
+
+      client ! HostConnection.Message(TextMessage(msg))
+    } else {
+      output ! TextMessage(s"unknown: $clientId")
+    }
+  }
+
+  def messageFromClient(clientId: String, msg: TextMessage): Unit = {
+    msg.textStream.runForeach { text =>
+      output ! (TextMessage(s"$clientId: " + text))
+    }
   }
 }
