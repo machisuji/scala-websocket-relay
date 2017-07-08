@@ -12,6 +12,8 @@ directly due to firewall restrictions. In this case the clients instead connect 
 
 Built using [SBT](http://www.scala-sbt.org/download.html) `0.13.5`.
 
+Run `sbt assembly` to generate an exutable JAR under `target/scala-2.12/`.
+
 ## Development
 
 Run using `sbt run` and go to [http://localhost:8080/](http://localhost:8080/) to see
