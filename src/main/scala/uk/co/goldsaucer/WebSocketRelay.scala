@@ -1,20 +1,18 @@
 /*
- * Copyright (C) 2009-2017 Lightbend Inc. <http://www.lightbend.com>
+ * Copyright (C) 2017 Goldsaucer Ltd <http://goldsaucer.co.uk>
  */
 
 package uk.co.goldsaucer
 
 import akka.NotUsed
-import akka.http.scaladsl.model.ws.BinaryMessage
 import akka.stream.scaladsl.Sink
 
-import scala.io.StdIn
-import akka.actor.{Actor, ActorRef, ActorSystem, PoisonPill, Props, Terminated}
+import akka.actor.{ActorSystem, PoisonPill, Props}
 import akka.stream.{ActorMaterializer, OverflowStrategy}
 import akka.stream.scaladsl.{Flow, Source}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.ws.UpgradeToWebSocket
-import akka.http.scaladsl.model.ws.{Message, TextMessage}
+import akka.http.scaladsl.model.ws.{Message}
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.HttpMethods._
 import akka.http.scaladsl.model.ContentTypes.`text/html(UTF-8)`
