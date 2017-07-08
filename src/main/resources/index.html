@@ -141,7 +141,7 @@
 
 <script type="text/javascript">
     $(document).ready(function() {
-      var socket = new WebSocket("ws://localhost:8080/session");
+      var socket = new WebSocket("ws://$host:$port/session");
 
       socket.onmessage = function(e) {
         var response = e.data;
@@ -151,7 +151,7 @@
 
         if (response.startsWith("session:")) {
           var sessionId = response.split(":")[1].trim();
-          var client = new WebSocket("ws://localhost:8080/session/" + sessionId);
+          var client = new WebSocket("ws://$host:$port/session/" + sessionId);
 
           client.onmessage = function(e) {
             var message = e.data;

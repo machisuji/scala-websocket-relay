@@ -97,9 +97,13 @@ object WebSocketRelay extends App {
         else
           scala.io.Source.fromInputStream(getClass.getClassLoader.getResourceAsStream("index.html")).mkString
 
+      val updatedHtml = html
+        .replaceAll("\\$port", req.uri.effectivePort.toString)
+        .replaceAll("\\$host", req.uri.authority.host.toString)
+
       HttpResponse(
         200,
-        entity = HttpEntity(`text/html(UTF-8)`, html)
+        entity = HttpEntity(`text/html(UTF-8)`, updatedHtml)
       )
 
     case r: HttpRequest =>
@@ -124,7 +128,7 @@ object WebSocketRelay extends App {
       }
   }
 
-  println(s"WebSocket Relay online at http://0.0.0.0:8080/")
+  println(s"WebSocket Relay online at http://0.0.0.0:$port/")
 
   sys.addShutdownHook(shutdown)
 }
