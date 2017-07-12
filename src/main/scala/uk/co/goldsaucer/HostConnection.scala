@@ -1,7 +1,7 @@
 package uk.co.goldsaucer
 
 import akka.actor.{Actor, ActorRef, Terminated}
-import akka.http.scaladsl.model.ws.TextMessage
+import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.stream.ActorMaterializer
 
 object HostConnection {
@@ -10,7 +10,7 @@ object HostConnection {
   case class Message(textMessage: TextMessage)
 }
 
-class HostConnection(id: String) extends Actor {
+class HostConnection(id: String, dummy: Boolean = false) extends Actor {
   protected var output: ActorRef = null
   protected var clients: Map[String, ActorRef] = Map.empty
 
@@ -35,13 +35,13 @@ class HostConnection(id: String) extends Actor {
     clients = clients + (clientId -> client)
     context.watch(client) // => receive Terminated on disconnect
     client ! ClientConnection.SetID(clientId)
-    output ! TextMessage(s"connected: $clientId")
+    messageToHost(s"connected: $clientId")
   }
 
   def clientDisconnected(client: ActorRef): Unit = {
     clients.find(_._2 == client).foreach { case (clientId, client) =>
       clients = clients.filterKeys(_ != clientId)
-      output ! TextMessage(s"disconnected: $clientId")
+      messageToHost(s"disconnected: $clientId")
     }
   }
 
@@ -51,7 +51,7 @@ class HostConnection(id: String) extends Actor {
 
       text match {
         case ToClient(id, message) => messageToClient(id, message)
-        case _ => output ! TextMessage("invalid")
+        case _ => messageToHost("invalid")
       }
     }
   }
@@ -62,13 +62,20 @@ class HostConnection(id: String) extends Actor {
 
       client ! HostConnection.Message(TextMessage(msg))
     } else {
-      output ! TextMessage(s"unknown: $clientId")
+      messageToHost(s"unknown: $clientId")
     }
   }
 
   def messageFromClient(clientId: String, msg: TextMessage): Unit = {
     msg.textStream.runForeach { text =>
-      output ! (TextMessage(s"$clientId: " + text))
+      messageToHost(s"$clientId: $text")
     }
+  }
+
+  def messageToHost(msg: String): Unit = messageToHost(TextMessage(msg))
+
+  def messageToHost(msg: Message): Unit = {
+    if (dummy) println(s"[dummy] message for host: $msg")
+    else output ! msg
   }
 }
