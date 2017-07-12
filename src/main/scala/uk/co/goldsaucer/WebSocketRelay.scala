@@ -17,7 +17,7 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.HttpMethods._
 import akka.http.scaladsl.model.ContentTypes.`text/html(UTF-8)`
 import akka.http.scaladsl.model.Uri.Query
-import akka.util.{ByteString, Timeout}
+import akka.util.Timeout
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
@@ -54,7 +54,14 @@ object WebSocketRelay extends App {
     implicit val timeout = Timeout(1 second)
     import scala.concurrent.ExecutionContext.Implicits.global
 
-    val flow = system.actorSelection(s"user/session:$sessionId").resolveOne().map { host =>
+    val session = system
+      .actorSelection(s"user/session:$sessionId")
+      .resolveOne()
+      .fallbackTo(Future {
+        system.actorOf(Props(new HostConnection(sessionId, dummy = true)), s"session:$sessionId")
+      })
+
+    val flow = session.map { host =>
       val client = system.actorOf(Props(new ClientConnection(host)))
 
       val incomingMessages: Sink[Message, NotUsed] =

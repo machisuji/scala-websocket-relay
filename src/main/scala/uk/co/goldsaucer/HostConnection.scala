@@ -1,6 +1,6 @@
 package uk.co.goldsaucer
 
-import akka.actor.{Actor, ActorRef, Terminated}
+import akka.actor.{Actor, ActorRef, PoisonPill, Terminated}
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.stream.ActorMaterializer
 
@@ -10,7 +10,7 @@ object HostConnection {
   case class Message(textMessage: TextMessage)
 }
 
-class HostConnection(id: String, dummy: Boolean = false) extends Actor {
+class HostConnection(id: String, private var dummy: Boolean = false) extends Actor {
   protected var output: ActorRef = null
   protected var clients: Map[String, ActorRef] = Map.empty
 
@@ -42,6 +42,10 @@ class HostConnection(id: String, dummy: Boolean = false) extends Actor {
     clients.find(_._2 == client).foreach { case (clientId, client) =>
       clients = clients.filterKeys(_ != clientId)
       messageToHost(s"disconnected: $clientId")
+    }
+
+    if (dummy && clients.isEmpty) {
+      self ! PoisonPill
     }
   }
 
@@ -75,7 +79,7 @@ class HostConnection(id: String, dummy: Boolean = false) extends Actor {
   def messageToHost(msg: String): Unit = messageToHost(TextMessage(msg))
 
   def messageToHost(msg: Message): Unit = {
-    if (dummy) println(s"[dummy] message for host: $msg")
+    if (dummy) println(s"[dummy-$id] message for host: $msg")
     else output ! msg
   }
 }
