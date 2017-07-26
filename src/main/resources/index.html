@@ -70,11 +70,13 @@
             30s to make sure the connection is kept alive.
         </li>
         <li>
-            <span class="code">GET /session/:id[?keepAlive=str] {Upgrade}</span> - WebSocket connection for clients.
+            <span class="code">GET /session/:id[?keepAlive=str][&dummyFallback=true] {Upgrade}</span> - WebSocket connection for clients.
             Any messages sent to this socket will be relayed to the host which connected through
             <span class="code">/session</span> to the session with the given ID.
             If <span class="code">keepAlive</span> is present <span class="code">"str"</span> is sent to the client every
             30s to make sure the connection is kept alive.
+            If <span class="code">dummyFallback</span> is true then a client can connect to a session even
+            if there is none. A dummy session will be opened which will just consume messages.
         </li>
     </ul>
 </div>

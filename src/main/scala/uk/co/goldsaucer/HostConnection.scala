@@ -8,11 +8,18 @@ object HostConnection {
   case class Init(actor: ActorRef)
   case object Connect
   case class Message(textMessage: TextMessage)
+
+  val maxClients: Int = 16
 }
 
 class HostConnection(id: String, private var dummy: Boolean = false) extends Actor {
+
+  type ID = String
+  type UUID = String
+
   protected var output: ActorRef = null
-  protected var clients: Map[String, ActorRef] = Map.empty
+  protected var clients: Map[ID, ActorRef] = Map.empty
+  protected var clientIdMap: Map[UUID, ID] = Map.empty
 
   implicit val materializer = ActorMaterializer()
 
@@ -21,7 +28,7 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
     case HostConnection.Connect                   => clientConnected(sender())
     case Terminated(client)                       => clientDisconnected(client)
     case msg: TextMessage                         => messageFromHost(msg)
-    case ClientConnection.Message(clientId, msg)  => messageFromClient(clientId, msg)
+    case ClientConnection.Message(clientId, msg)  => messageFromClient(clientId, msg, sender)
   }
 
   def init(actor: ActorRef): Unit = {
@@ -70,9 +77,22 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
     }
   }
 
-  def messageFromClient(clientId: String, msg: TextMessage): Unit = {
+  def messageFromClient(clientId: String, msg: TextMessage, sender: ActorRef): Unit = {
     msg.textStream.runForeach { text =>
-      messageToHost(s"$clientId: $text")
+      if (text.startsWith("Client-Id: ")) {
+        val id = clientId
+        val uuid = text.substring(text.indexOf(":") + 1).trim()
+
+        if (clientIdMap.contains(uuid)) {
+          sender ! ClientConnection.SetID(clientIdMap(uuid))
+        } else if (clientIdMap.size < HostConnection.maxClients) {
+          clientIdMap = clientIdMap + (uuid -> clientId)
+        } else {
+          sender ! HostConnection.Message(TextMessage("error: maximum number of clients reached"))
+        }
+      } else {
+        messageToHost(s"$clientId: $text")
+      }
     }
   }
 
