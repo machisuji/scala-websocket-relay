@@ -85,10 +85,15 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
 
         if (clientIdMap.contains(uuid)) {
           sender ! ClientConnection.SetID(clientIdMap(uuid))
+
+          messageToHost(s"${clientIdMap(uuid)}: $text")
         } else if (clientIdMap.size < HostConnection.maxClients) {
           clientIdMap = clientIdMap + (uuid -> clientId)
+
+          messageToHost(s"$clientId: $text")
         } else {
           sender ! HostConnection.Message(TextMessage("error: maximum number of clients reached"))
+          sender ! PoisonPill
         }
       } else {
         messageToHost(s"$clientId: $text")
