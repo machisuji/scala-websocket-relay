@@ -14,7 +14,7 @@ object HostConnection {
 
 class HostConnection(id: String, private var dummy: Boolean = false) extends Actor {
 
-  type ID = String
+  type ID = Int
   type UUID = String
 
   protected var output: ActorRef = null
@@ -38,12 +38,29 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
   }
 
   def clientConnected(client: ActorRef): Unit = {
-    val clientId = (clients.size + 1).toString
-    clients = clients + (clientId -> client)
-    context.watch(client) // => receive Terminated on disconnect
-    client ! ClientConnection.SetID(clientId)
-    messageToHost(s"connected: $clientId")
+    val result: Option[Unit] = nextClientId.map { clientId =>
+      clients = clients + (clientId -> client)
+      context.watch(client) // => receive Terminated on disconnect
+      client ! ClientConnection.SetID(clientId)
+      messageToHost(s"connected: $clientId")
+    }
+
+    if (result.isEmpty) {
+      client ! HostConnection.Message(TextMessage(
+        "error: no slots available, max clients reached"
+      ))
+
+      client ! PoisonPill
+    }
   }
+
+  def nextClientId: Option[ID] =
+    (1 to HostConnection.maxClients)
+      .toSet
+      .diff(clientIdMap.values.toSet) // get IDs which are still available
+      .toSeq
+      .sorted
+      .headOption // get smallest one if possible
 
   def clientDisconnected(client: ActorRef): Unit = {
     clients.find(_._2 == client).foreach { case (clientId, client) =>
@@ -58,16 +75,16 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
 
   def messageFromHost(msg: TextMessage): Unit = {
     msg.textStream.runForeach { text =>
-      val ToClient = """\A([a-f0-9]+):\s(.+)\Z""".r
+      val ToClient = """\A(\d+):\s(.+)\Z""".r
 
       text match {
-        case ToClient(id, message) => messageToClient(id, message)
+        case ToClient(id, message) => messageToClient(id.toInt, message)
         case _ => messageToHost("invalid")
       }
     }
   }
 
-  def messageToClient(clientId: String, msg: String): Unit = {
+  def messageToClient(clientId: Int, msg: String): Unit = {
     if (clients.contains(clientId)) {
       val client = clients(clientId)
 
@@ -77,7 +94,7 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
     }
   }
 
-  def messageFromClient(clientId: String, msg: TextMessage, sender: ActorRef): Unit = {
+  def messageFromClient(clientId: Int, msg: TextMessage, sender: ActorRef): Unit = {
     msg.textStream.runForeach { text =>
       if (text.startsWith("Client-Id: ")) {
         val id = clientId

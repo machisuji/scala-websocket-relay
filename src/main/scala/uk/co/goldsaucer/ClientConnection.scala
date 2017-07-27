@@ -6,13 +6,13 @@ import akka.stream.ActorMaterializer
 
 object ClientConnection {
   case class Init(actor: ActorRef)
-  case class SetID(id: String)
-  case class Message(clientId: String, textMessage: TextMessage)
+  case class SetID(id: Int)
+  case class Message(clientId: Int, textMessage: TextMessage)
 }
 
 class ClientConnection(val host: ActorRef) extends Actor {
   protected var output: ActorRef = null
-  protected var id: String = null
+  protected var id: Int = -1
 
   def receive = {
     case ClientConnection.Init(actor) =>
