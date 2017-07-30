@@ -99,13 +99,18 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
       if (text.startsWith("Client-Id: ")) {
         val id = clientId
         val uuid = text.substring(text.indexOf(":") + 1).trim()
+        lazy val setId: Option[ID] = nextClientId
 
         if (clientIdMap.contains(uuid)) {
           sender ! ClientConnection.SetID(clientIdMap(uuid))
 
           messageToHost(s"${clientIdMap(uuid)}: $text")
-        } else if (clientIdMap.size < HostConnection.maxClients) {
+        } else if (clientIdMap.size < HostConnection.maxClients && setId.isDefined) {
+          val clientId = setId.get
+
           clientIdMap = clientIdMap + (uuid -> clientId)
+
+          sender ! ClientConnection.SetID(clientId)
 
           messageToHost(s"$clientId: $text")
         } else {
