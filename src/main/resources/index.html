@@ -44,6 +44,18 @@
             background-color: #DDDDDD;
             padding: 2px;
         }
+
+        .host-header {
+          width: 33%;
+        }
+
+        .client-1-header {
+          width: 33%;
+        }
+
+        .client-2-header {
+          width: 33%;
+        }
     </style>
 </head>
 <body>
@@ -123,25 +135,38 @@
 </div>
 <div class="client section">
     <h2>Test</h2>
-    <div class="column">
-        <h3>Host</h3>
-        <p>
-            <input id="host-input" placeholder="Input"></input>
-        </p>
-        <p>
-            <span id="host-output">&nbsp;</span>
-        </p>
-    </div>
 
-    <div class="column">
-        <h3>Client 1</h3>
-        <p>
-            <input id="client-1-input" placeholder="input"></input>
-        </p>
-        <p>
-            <span id="client-1-output">&nbsp;</span>
-        </p>
-    </div>
+    <table>
+      <tr>
+        <th class="host-header">Host</th>
+        <th class="client-1-header">Client 1</th>
+        <th class="client-2-header">Client 2</th>
+      </tr>
+      <tr>
+        <td>
+          <input id="host-input" placeholder="Input"></input>
+        </td>
+        <td>
+          <input id="client-1-input" placeholder="input"></input>
+          <button id="client-1-connect">Connect</button>
+        </td>
+        <td>
+          <input id="client-2-input" placeholder="input"></input>
+          <button id="client-2-connect">Connect</button>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <div id="host-output">&nbsp;</div>
+        </td>
+        <td>
+          <div id="client-1-output">&nbsp;</div>
+        </td>
+        <td>
+          <div id="client-2-output">&nbsp;</div>
+        </td>
+      </tr>
+    </table>
 </div>
 </body>
 
@@ -152,29 +177,72 @@
       socket.onmessage = function(e) {
         var response = e.data;
 
-        $("#host-output").append(response + "</br>");
+        if (response != "keepAlive") {
+          $("#host-output").append(response + "</br>");
+        }
         console.log("host received message: " + response);
 
         if (response.startsWith("session:")) {
           var sessionId = response.split(":")[1].trim();
-          var client = new WebSocket("ws://$host:$port/session/" + sessionId + "?keepAlive=keepAlive");
 
-          client.onmessage = function(e) {
-            var message = e.data;
+          $("#client-1-connect").click(function() {
+            var client = new WebSocket("ws://$host:$port/session/" + sessionId + "?keepAlive=keepAlive");
 
-            $("#client-1-output").append(message + "</br>");
-            console.log("client 1 received message: " + message);
-          };
+            client.onmessage = function(e) {
+              var message = e.data;
 
-          client.onclose = function(e) {
-            $("#client-1-output").append("connection failed");
-          };
+              if (message != "keepAlive") {
+                $("#client-1-output").append(message + "</br>");
+              }
+              console.log("client 1 received message: " + message);
+            };
 
-          $("#client-1-input").change(function() {
-            var message = $(this).val();
+            client.onopen = function(e) {
+              client.send("Client-Id: 0x1000");
+            };
 
-            client.send(message);
-            console.log("client 1 sent message: " + message);
+            client.onclose = function(e) {
+              $("#client-1-output").append("connection failed");
+            };
+
+            $("#client-1-input").change(function() {
+              var message = $(this).val();
+
+              client.send(message);
+              console.log("client 1 sent message: " + message);
+
+              $(this).val("");
+            });
+          });
+
+          $("#client-2-connect").click(function() {
+            var client2 = new WebSocket("ws://$host:$port/session/" + sessionId + "?keepAlive=keepAlive");
+
+            client2.onmessage = function(e) {
+              var message = e.data;
+
+              if (message != "keepAlive") {
+                $("#client-2-output").append(message + "</br>");
+              }
+              console.log("client 2 received message: " + message);
+            };
+
+            client2.onopen = function(e) {
+              client2.send("Client-Id: 0x1001");
+            };
+
+            client2.onclose = function(e) {
+              $("#client-2-output").append("connection failed");
+            };
+
+            $("#client-2-input").change(function() {
+              var message = $(this).val();
+
+              client2.send(message);
+              console.log("client 2 sent message: " + message);
+
+              $(this).val("");
+            });
           });
         }
       };
