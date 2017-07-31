@@ -1,6 +1,6 @@
 name := "scala-websocket-relay"
 
-version := "0.5.2"
+version := "0.5.3"
 
 scalaVersion := "2.12.2"
 

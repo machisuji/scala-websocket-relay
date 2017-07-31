@@ -96,7 +96,7 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
 
   def messageFromClient(clientId: Int, msg: TextMessage, sender: ActorRef): Unit = {
     msg.textStream.runForeach { text =>
-      if (text.startsWith("Client-Id: ")) {
+      if (text.startsWith("ClientId: ")) {
         val id = clientId
         val uuid = text.substring(text.indexOf(":") + 1).trim()
         lazy val setId: Option[ID] = nextClientId
