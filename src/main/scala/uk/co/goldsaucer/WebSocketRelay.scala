@@ -53,7 +53,8 @@ object WebSocketRelay extends App {
   def clientFlow(
     sessionId: String,
     keepAlive: Option[String] = None,
-    dummyFallback: Boolean = false
+    dummyFallback: Boolean = false,
+    clientUUID: Option[String]
   ): Option[Flow[Message, Message, NotUsed]] = {
     implicit val timeout = Timeout(1 second)
     import scala.concurrent.ExecutionContext.Implicits.global
@@ -71,7 +72,7 @@ object WebSocketRelay extends App {
         _session
 
     val flow = session.map { host =>
-      val client = system.actorOf(Props(new ClientConnection(host)))
+      val client = system.actorOf(Props(new ClientConnection(host, clientUUID)))
 
       val incomingMessages: Sink[Message, NotUsed] =
         Flow[Message].to(Sink.actorRef[Message](client, PoisonPill))
@@ -107,7 +108,7 @@ object WebSocketRelay extends App {
 
       req.header[UpgradeToWebSocket] match {
         case Some(upgrade) =>
-          clientFlow(sessionId, query.get("keepAlive"), query.get("dummyFallback").contains("true"))
+          clientFlow(sessionId, query.get("keepAlive"), query.get("dummyFallback").contains("true"), query.get("client"))
             .map(flow => upgrade.handleMessages(flow))
             .getOrElse(HttpResponse(404, entity = "Session not found"))
         case None => HttpResponse(400, entity = "Not a valid websocket request!")

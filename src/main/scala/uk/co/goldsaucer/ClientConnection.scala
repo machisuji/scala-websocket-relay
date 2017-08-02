@@ -10,14 +10,14 @@ object ClientConnection {
   case class Message(clientId: Int, textMessage: TextMessage)
 }
 
-class ClientConnection(val host: ActorRef) extends Actor {
+class ClientConnection(val host: ActorRef, uuid: Option[String]) extends Actor {
   protected var output: ActorRef = null
   protected var id: Int = -1
 
   def receive = {
     case ClientConnection.Init(actor) =>
       output = actor
-      host ! HostConnection.Connect
+      host ! HostConnection.Connect(uuid)
     case ClientConnection.SetID(id) =>
       this.id = id
     case msg: TextMessage =>
