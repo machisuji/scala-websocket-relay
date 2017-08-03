@@ -38,10 +38,10 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
   }
 
   def clientConnected(client: ActorRef, uuid: Option[String]): Unit = {
-    val result: Option[Unit] = nextClientId.map { clientId =>
+    val result: Option[Unit] = uuid.flatMap(clientIdMap.get).orElse(nextClientId).map { clientId =>
       clients = clients + (clientId -> client)
 
-      if (uuid.isDefined) {
+      if (uuid.isDefined && !clientIdMap.contains(uuid.get)) {
         clientIdMap = clientIdMap + (uuid.get -> clientId)
       }
 
@@ -63,6 +63,7 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
     (1 to HostConnection.maxClients)
       .toSet
       .diff(clientIdMap.values.toSet) // get IDs which are still available
+      .diff(clients.keySet)
       .toSeq
       .sorted
       .headOption // get smallest one if possible
@@ -101,30 +102,7 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
 
   def messageFromClient(clientId: Int, msg: TextMessage, sender: ActorRef): Unit = {
     msg.textStream.runForeach { text =>
-      if (text.startsWith("ClientId: ")) {
-        val id = clientId
-        val uuid = text.substring(text.indexOf(":") + 1).trim()
-        lazy val setId: Option[ID] = nextClientId
-
-        if (clientIdMap.contains(uuid)) {
-          sender ! ClientConnection.SetID(clientIdMap(uuid))
-
-          messageToHost(s"${clientIdMap(uuid)}: $text")
-        } else if (clientIdMap.size < HostConnection.maxClients && setId.isDefined) {
-          val clientId = setId.get
-
-          clientIdMap = clientIdMap + (uuid -> clientId)
-
-          sender ! ClientConnection.SetID(clientId)
-
-          messageToHost(s"$clientId: $text")
-        } else {
-          sender ! HostConnection.Message(TextMessage("error: maximum number of clients reached"))
-          sender ! PoisonPill
-        }
-      } else {
-        messageToHost(s"$clientId: $text")
-      }
+      messageToHost(s"$clientId: $text")
     }
   }
 

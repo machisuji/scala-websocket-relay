@@ -75,14 +75,14 @@
             <span class="code">GET /</span> - This page
         </li>
         <li>
-            <span class="code">GET /session[?id=&lt;id&gt;&keepAlive=str] {Upgrade}</span> - WebSocket connection for the host.
+            <span class="code">GET /session[?id=&lt;id&gt;&amp;keepAlive=str] {Upgrade}</span> - WebSocket connection for the host.
             <span class="code">id</span> is an optional parameter useful when you want to reconnect to the same session.
             If ommitted a session ID will be generated.
             If <span class="code">keepAlive</span> is present <span class="code">"str"</span> is sent to the host every
             30s to make sure the connection is kept alive.
         </li>
         <li>
-            <span class="code">GET /session/:id[?keepAlive=str][&dummyFallback=true] {Upgrade}</span> - WebSocket connection for clients.
+            <span class="code">GET /session/:id[?keepAlive=str][&amp;dummyFallback=true][&amp;client=&lt;uuid&gt;] {Upgrade}</span> - WebSocket connection for clients.
             Any messages sent to this socket will be relayed to the host which connected through
             <span class="code">/session</span> to the session with the given ID.
             If <span class="code">keepAlive</span> is present <span class="code">"str"</span> is sent to the client every
@@ -186,7 +186,7 @@
           var sessionId = response.split(":")[1].trim();
 
           $("#client-1-connect").click(function() {
-            var client = new WebSocket("ws://$host:$port/session/" + sessionId + "?keepAlive=keepAlive");
+            var client = new WebSocket("ws://$host:$port/session/" + sessionId + "?keepAlive=keepAlive&client=n1");
 
             client.onmessage = function(e) {
               var message = e.data;
@@ -216,7 +216,7 @@
           });
 
           $("#client-2-connect").click(function() {
-            var client2 = new WebSocket("ws://$host:$port/session/" + sessionId + "?keepAlive=keepAlive");
+            var client2 = new WebSocket("ws://$host:$port/session/" + sessionId + "?keepAlive=keepAlive&client=n2");
 
             client2.onmessage = function(e) {
               var message = e.data;
