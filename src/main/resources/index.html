@@ -1,75 +1,35 @@
 <html>
 <head>
     <title>WebSocket Relay Server</title>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
-    <style type="text/css">
-        .header {
-            padding-left: 2em;
-            text-transform: uppercase;
-            background-color: #9966CC;
-            color: #663377;
-        }
-
-        .header h1 {
-            margin: 0
-        }
-
-        .client {
-            background-color: #DDDDDD;
-        }
-
-        .intro {
-            background-color: #CFAFFF;
-        }
-
-        .section {
-            padding: 2em;
-            padding-top: 0.5em;
-            padding-bottom: 0.5em;
-        }
-
-        .column {
-            display: inline-block;
-            border-right: 2px groove #888888;
-            margin-right: 1em;
-            padding-right: 1em;
-        }
-
-        body {
-            margin: 0
-        }
-
-        .code {
-            font-family: monospace;
-            background-color: #DDDDDD;
-            padding: 2px;
-        }
-
-        .host-header {
-          width: 33%;
-        }
-
-        .client-1-header {
-          width: 33%;
-        }
-
-        .client-2-header {
-          width: 33%;
-        }
-    </style>
+    <script type="text/javascript" src="js/jquery.min.js"></script>
+    <link rel="stylesheet" href="css/font-awesome.min.css">
+    <link rel="stylesheet" href="css/bulma.min.css">
+    <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
-<div class="header">
-    <h1>WebSocket Relay Server</h1>
-</div>
-<div class="intro section">
-    <p>
+
+<section class="hero is-warning">
+  <div class="hero-body">
+    <div class="container">
+      <h1 class="title">
+        WebSocket Relay Server
+      </h1>
+      <h2 class="subtitle">
         Connects a host with clients through web sockets when the clients cannot connect to the host
         directly due to firewall restrictions. In this case the clients instead connect to this relay server.
+      </h2>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <h1 class="title">
+      API
+    </h1>
+    <p class="subtitle">
+      The Relay's API endpoints
     </p>
-</div>
-<div class="api section">
-    <h2>API</h2>
     <ul>
         <li>
             <span class="code">GET /</span> - This page
@@ -91,12 +51,17 @@
             if there is none. A dummy session will be opened which will just consume messages.
         </li>
     </ul>
-</div>
-<div class="protocol section">
-    <h2>Protocol</h2>
-    <p>
-        There are the following message formats used for the host-to-server communication
-        (<span class="code">/session</span>).
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <h1 class="title">
+      Protocol
+    </h1>
+    <p class="subtitle">
+      There are the following message formats used for the host-to-server communication
+      (<span class="code">/session</span>).
     </p>
     <ul>
         <li>
@@ -132,9 +97,11 @@
     <p>
         Messages from clients are relayed as-is to the server listening to the given session.
     </p>
-</div>
-<div class="client section">
-    <h2>Test</h2>
+  </div>
+</section>
+
+<section class="section">
+    <h1 class="title">Test</h1>
 
     <table>
       <tr>
@@ -167,96 +134,11 @@
         </td>
       </tr>
     </table>
-</div>
+</section>
 </body>
 
 <script type="text/javascript">
-    $(document).ready(function() {
-      var socket = new WebSocket("ws://$host:$port/session?keepAlive=keepAlive");
-
-      socket.onmessage = function(e) {
-        var response = e.data;
-
-        if (response != "keepAlive") {
-          $("#host-output").append(response + "</br>");
-        }
-        console.log("host received message: " + response);
-
-        if (response.startsWith("session:")) {
-          var sessionId = response.split(":")[1].trim();
-
-          $("#client-1-connect").click(function() {
-            var client = new WebSocket("ws://$host:$port/session/" + sessionId + "?keepAlive=keepAlive&client=n1");
-
-            client.onmessage = function(e) {
-              var message = e.data;
-
-              if (message != "keepAlive") {
-                $("#client-1-output").append(message + "</br>");
-              }
-              console.log("client 1 received message: " + message);
-            };
-
-            client.onopen = function(e) {
-              client.send("ClientId: 0x1000");
-            };
-
-            client.onclose = function(e) {
-              $("#client-1-output").append("connection failed");
-            };
-
-            $("#client-1-input").change(function() {
-              var message = $(this).val();
-
-              client.send(message);
-              console.log("client 1 sent message: " + message);
-
-              $(this).val("");
-            });
-          });
-
-          $("#client-2-connect").click(function() {
-            var client2 = new WebSocket("ws://$host:$port/session/" + sessionId + "?keepAlive=keepAlive&client=n2");
-
-            client2.onmessage = function(e) {
-              var message = e.data;
-
-              if (message != "keepAlive") {
-                $("#client-2-output").append(message + "</br>");
-              }
-              console.log("client 2 received message: " + message);
-            };
-
-            client2.onopen = function(e) {
-              client2.send("ClientId: 0x1001");
-            };
-
-            client2.onclose = function(e) {
-              $("#client-2-output").append("connection failed");
-            };
-
-            $("#client-2-input").change(function() {
-              var message = $(this).val();
-
-              client2.send(message);
-              console.log("client 2 sent message: " + message);
-
-              $(this).val("");
-            });
-          });
-        }
-      };
-
-      socket.onclose = function(e) {
-        $("#host-output").append("connection failed");
-      };
-
-      $("#host-input").change(function() {
-        var message = $(this).val();
-
-        socket.send(message);
-        console.log("host sent message: " + message);
-      });
-    });
+  window.baseURL = "ws://$host:$port";
 </script>
+<script type="text/javascript" src="js/main.js"></script>
 </html>

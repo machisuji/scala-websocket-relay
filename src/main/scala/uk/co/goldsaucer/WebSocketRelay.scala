@@ -15,7 +15,7 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.ws.{BinaryMessage, Message, TextMessage, UpgradeToWebSocket}
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.HttpMethods._
-import akka.http.scaladsl.model.ContentTypes.`text/html(UTF-8)`
+import akka.http.scaladsl.model.ContentTypes._
 import akka.http.scaladsl.model.Uri.Query
 import akka.util.Timeout
 
@@ -94,6 +94,26 @@ object WebSocketRelay extends App {
     Await.result(flow.fallbackTo(Future { None }), 1 second)
   }
 
+  def getFile(fileName: String): Option[String] = {
+    val file: String = if (fileName.startsWith("/")) fileName.substring(1) else fileName
+    val filePath: String = s"src/main/resources/$file"
+
+    if (new File(filePath).exists())
+      Some(scala.io.Source.fromFile(filePath).mkString)
+    else
+      Some(getClass.getClassLoader.getResourceAsStream(file))
+        .filter(_ ne null)
+        .map(scala.io.Source.fromInputStream)
+        .map(_.mkString)
+  }
+
+  def isFile(fileName: String): Boolean = {
+    val file: String = if (fileName.startsWith("/")) fileName.substring(1) else fileName
+    val filePath: String = s"src/main/resources/$file"
+
+    (new File(filePath).exists()) || (getClass.getClassLoader.getResource(file) ne null)
+  }
+
   val requestHandler: HttpRequest => HttpResponse = {
     case req @ HttpRequest(GET, Uri.Path("/session"), _, _, _) =>
       val query = Query(req.uri.rawQueryString)
@@ -118,7 +138,7 @@ object WebSocketRelay extends App {
 
       val html =
         if (new File(filePath).exists())
-          scala.io.Source.fromFile("src/main/resources/index.html").mkString
+          scala.io.Source.fromFile(filePath).mkString
         else
           scala.io.Source.fromInputStream(getClass.getClassLoader.getResourceAsStream("index.html")).mkString
 
@@ -130,7 +150,12 @@ object WebSocketRelay extends App {
         200,
         entity = HttpEntity(`text/html(UTF-8)`, updatedHtml)
       )
+    case req @ HttpRequest(GET, uri, _, _, _) if isFile(uri.path.toString) =>
+      val content = getFile(uri.path.toString)
 
+      content
+        .map(str => HttpResponse(200, entity = HttpEntity(`text/plain(UTF-8)`, str)))
+        .getOrElse(HttpResponse(404, entity = "not found"))
     case r: HttpRequest =>
       r.discardEntityBytes()
       HttpResponse(404, entity = "not found")
