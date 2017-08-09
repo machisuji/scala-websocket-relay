@@ -10,16 +10,22 @@ object HostConnection {
   case class Message(textMessage: TextMessage)
 
   case class RequestToJoin(slaveSessionId: String, numClients: Int)
-  case class OfferToJoin(masterSessionId: String)
-  case class AcceptOffer(slaveSessionId: String)
+  case class OfferToJoin(masterSessionId: String, numClients: Int)
+  case class AcceptOffer(slaveSessionId: String, numClients: Int)
   case class DeclineOffer(slaveSessionId: String)
   case class ConfirmJoin(masterSessionId: String)
 
   val maxClients: Int = sys.env.get("MAX_CLIENTS").map(_.toInt).getOrElse(8)
+
+  case class MasterSession(id: String, actor: ActorRef, secret: String = java.util.UUID.randomUUID().toString)
+  case class SlaveSession(id: String, actor: ActorRef, numClients: Int, secret: String = java.util.UUID.randomUUID().toString)
 }
 
 class HostConnection(id: String, private var dummy: Boolean = false) extends Actor {
-  import HostConnection.{RequestToJoin, maxClients, OfferToJoin, AcceptOffer, DeclineOffer, ConfirmJoin}
+  import HostConnection.{
+    RequestToJoin, OfferToJoin, AcceptOffer, DeclineOffer, ConfirmJoin,
+    MasterSession, SlaveSession
+  }
 
   type ID = Int
   type UUID = String
@@ -28,10 +34,11 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
   protected var clients: Map[ID, ActorRef] = Map.empty
   protected var clientIdMap: Map[UUID, ID] = Map.empty
 
-  protected var masterSessionId: String = null
-  protected var masterSession: ActorRef = null
+  protected var maxLocalClients: Int = HostConnection.maxClients
 
-  protected var slaveSessions: Map[String, ActorRef] = Map.empty
+  protected var masterSession: MasterSession = null
+
+  protected var slaveSessions: IndexedSeq[SlaveSession] = IndexedSeq.empty
 
   protected var allowMaster: Boolean = false // if false the host only wants to join as a slave, not be the master
   protected var allowSlave: Boolean = false // if false do not try to join other sessions as a slave, only be master
@@ -44,14 +51,14 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
     case Terminated(client)                       => clientDisconnected(client)
     case msg: TextMessage                         => messageFromHost(msg)
     case ClientConnection.Message(clientId, msg)  => messageFromClient(clientId, msg, sender)
-    case HostConnection.Message(msg)              => messageFromSession(msg)
+    case HostConnection.Message(msg)              => messageFromSession(msg, sender)
 
     case RequestToJoin(slaveSessionId, numClients) if allowMaster && sender != self => {
       handleJoinRequest(slaveSessionId, numClients, sender) // ignore self from broadcasts
     }
-    case OfferToJoin(masterSessionId: String) if allowSlave => joinSession(masterSessionId, sender)
-    case AcceptOffer(slaveSessionId)          if allowMaster  => addSlave(slaveSessionId, sender)
-    case ConfirmJoin(masterSessionId)         if allowSlave => setMaster(masterSessionId, sender)
+    case OfferToJoin(masterSessionId, numClients) if allowSlave  => joinSession(masterSessionId, sender, numClients)
+    case AcceptOffer(slaveSessionId, numClients)  if allowMaster => addSlave(slaveSessionId, sender, numClients)
+    case ConfirmJoin(masterSessionId)             if allowSlave  => setMaster(masterSessionId, sender)
   }
 
   def init(actor: ActorRef): Unit = {
@@ -67,6 +74,8 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
 
   def clientConnected(client: ActorRef, uuid: Option[String]): Unit = {
     val result: Option[Unit] = uuid.flatMap(clientIdMap.get).orElse(nextClientId).map { clientId =>
+      val msg = s"connected: $clientId"
+
       clients = clients + (clientId -> client)
 
       if (uuid.isDefined && !clientIdMap.contains(uuid.get)) {
@@ -75,7 +84,11 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
 
       context.watch(client) // => receive Terminated on disconnect
       client ! ClientConnection.SetID(clientId)
-      messageToHost(s"connected: $clientId")
+      messageToHost(msg)
+
+      if (isSlave) {
+        masterSession.actor ! HostConnection.Message(TextMessage.Strict(msg))
+      }
     }
 
     if (result.isEmpty) {
@@ -88,7 +101,7 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
   }
 
   def nextClientId: Option[ID] =
-    (1 to HostConnection.maxClients)
+    (1 to maxLocalClients)
       .toSet
       .diff(clientIdMap.values.toSet) // get IDs which are still available
       .diff(clients.keySet)
@@ -97,9 +110,18 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
       .headOption // get smallest one if possible
 
   def clientDisconnected(client: ActorRef): Unit = {
-    clients.find(_._2 == client).foreach { case (clientId, client) =>
-      clients = clients.filterKeys(_ != clientId)
-      messageToHost(s"disconnected: $clientId")
+    println(s"disconnected: $client")
+    clients.find(_._2 == client).foreach {
+      case (clientId, client) =>
+        val msg = s"disconnected: $clientId"
+
+        clients = clients.filterKeys(_ != clientId)
+
+        messageToHost(msg)
+
+        if (isSlave) {
+          masterSession.actor ! HostConnection.Message(TextMessage.Strict(msg))
+        }
     }
 
     if (dummy && clients.isEmpty) {
@@ -122,14 +144,31 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
   /**
     * A message coming from another HostConnection session. I.e. a slave or master.
     */
-  def messageFromSession(msg: TextMessage): Unit = {
-    println(s"$id receives message from other session ($masterSessionId): $msg")
+  def messageFromSession(msg: TextMessage, session: ActorRef): Unit = {
+    println(s"$id receives message from other session (${masterSession}): $msg")
 
     val ToClient = """\A(\d+):\s(.+)\Z""".r
+    val Connected = """\Aconnected:\s(\d+)\Z""".r
+    val Disconnected = """\Adisconnected:\s(\d+)\Z""".r
 
     msg.textStream.runForeach {
-      case ToClient(id, message) if id.toInt > 0 => messageToHost(s"${clients.size + id.toInt}: $message")
+      case ToClient(id, message) if id.toInt > 0 => messageToHost(s"${translateSlaveClientId(id.toInt, session)}: $message")
+      case Connected(id) => messageToHost(s"connected: ${translateSlaveClientId(id.toInt, session)}")
+      case Disconnected(id) => messageToHost(s"disconnected: ${translateSlaveClientId(id.toInt, session)}")
       case other => messageToHost(other)
+    }
+  }
+
+  def translateSlaveClientId(
+    clientId: Int,
+    session: ActorRef,
+    slaves: List[SlaveSession] = slaveSessions.toList,
+    offset: Int = clients.size
+  ): Int = slaves match {
+    case Nil => clientId
+    case slave :: tail => {
+      if (slave.actor == session) offset + clientId
+      else translateSlaveClientId(clientId, session, tail, offset + slave.numClients)
     }
   }
 
@@ -140,34 +179,37 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
     if (allowSlave) {
       context.actorSelection(s"/user/session:*") ! RequestToJoin(id, clients.size)
     }
+
+    maxLocalClients = clients.size // don't allow any new clients to join once session joining is active
   }
 
   def handleJoinRequest(slaveSessionId: String, numClients: Int, sender: ActorRef): Unit = {
     if (acceptJoinRequest(slaveSessionId, numClients)) {
       println(s"$id accepts join request from $slaveSessionId")
-      sender ! OfferToJoin(id)
+      sender ! OfferToJoin(id, numClients)
     } else {
       println(s"$id denies join request from $slaveSessionId")
     }
   }
 
   def acceptJoinRequest(slaveSessionId: String, numClients: Int): Boolean = {
-    clients.size + numClients <= maxClients
+    clients.size + numClients <= HostConnection.maxClients
   }
 
-  def joinSession(masterSessionId: String, sender: ActorRef): Unit = {
+  def joinSession(masterSessionId: String, sender: ActorRef, numClients: Int): Unit = {
     println(s"$id received offer to join $masterSessionId")
 
-    if (this.masterSessionId ne null) {
+    if (isSlave || clients.size > numClients) {
       sender ! DeclineOffer(id)
     } else {
-      sender ! AcceptOffer(id)
+      sender ! AcceptOffer(id, clients.size)
     }
   }
 
-  def addSlave(slaveSessionId: String, sender: ActorRef): Unit = {
+  def addSlave(slaveSessionId: String, sender: ActorRef, numClients: Int): Unit = {
     if (!isSlave) { // do not allow slaves to have slaves of their own for now
-      slaveSessions = slaveSessions + (slaveSessionId -> sender)
+      val slave = SlaveSession(slaveSessionId, sender, numClients)
+      slaveSessions = slaveSessions :+ slave
 
       sender ! ConfirmJoin(id)
 
@@ -176,8 +218,7 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
   }
 
   def setMaster(masterSessionId: String, sender: ActorRef): Unit = {
-    this.masterSessionId = masterSessionId
-    this.masterSession = sender
+    this.masterSession = MasterSession(masterSessionId, sender)
 
     messageToHost(s"!set-master: $masterSessionId")
   }
@@ -188,14 +229,36 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
 
       client ! HostConnection.Message(TextMessage(msg))
     } else if (clientId == 0) {
-      if (masterSession ne null) {
-        println(s"$id sending $msg to master ($masterSessionId)")
-        masterSession ! HostConnection.Message(TextMessage(s"0: $msg"))
+      if (isSlave) {
+        println(s"$id sending $msg to master (${masterSession.id})")
+        masterSession.actor ! HostConnection.Message(TextMessage(msg))
       }
-      println(s"$id sending $msg to slaves ($slaveSessions.values)")
-      slaveSessions.values.foreach(_ ! HostConnection.Message(TextMessage(s"0: $msg")))
+      if (isMaster) {
+        println(s"$id sending $msg to slaves ($slaveSessions.values)")
+        slaveSessions.foreach(_.actor ! HostConnection.Message(TextMessage(msg)))
+      }
+    } else if (clientId >= clients.size && slaveSessions.size > 0) {
+      println("sending message to slave client")
+
+      forwardMessageToSlave(clientId, msg)
     } else {
       messageToHost(s"unknown: $clientId")
+    }
+  }
+
+  def forwardMessageToSlave(
+    clientId: Int,
+    msg: String,
+    slaves: List[SlaveSession] = slaveSessions.toList,
+    offset: Int = clients.size
+  ): Unit = slaves match {
+    case Nil => ()
+    case slave :: tail => {
+      if (clientId >= offset && clientId < offset + slave.numClients) {
+        slave.actor ! TextMessage.Strict(s"${clientId - offset}: $msg")
+      } else {
+        forwardMessageToSlave(clientId, msg, tail, offset + slave.numClients)
+      }
     }
   }
 
@@ -203,8 +266,11 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
     msg.textStream.runForeach { text =>
       messageToHost(s"$clientId: $text")
 
-      if (masterSession ne null) {
-        masterSession ! HostConnection.Message(TextMessage(s"$clientId: $text"))
+      println("message from client to host >> " + s"$clientId: $text")
+
+      if (isSlave) {
+        println("forwarding client message to master: " + s"$clientId: $text")
+        masterSession.actor ! HostConnection.Message(TextMessage(s"$clientId: $text"))
       }
     }
   }

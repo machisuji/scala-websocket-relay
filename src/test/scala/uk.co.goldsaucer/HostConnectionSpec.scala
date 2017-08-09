@@ -1,10 +1,12 @@
 package uk.co.goldsaucer
 
-import akka.actor.{Actor, ActorRef, ActorSystem, PoisonPill, Props}
+import akka.actor.{Actor, ActorRef, ActorSystem, PoisonPill, Props, Terminated}
 import akka.http.scaladsl.model.ws.TextMessage
 import akka.testkit.{ImplicitSender, TestActors, TestKit, TestProbe}
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 import uk.co.goldsaucer.WebSocketRelay.system
+
+import scala.concurrent.duration._
 
 class HostConnectionSpec() extends TestKit(ActorSystem("HostConnectionSpec")) with ImplicitSender
   with WordSpecLike with Matchers with BeforeAndAfterAll {
@@ -166,13 +168,15 @@ class HostConnectionSpec() extends TestKit(ActorSystem("HostConnectionSpec")) wi
 
       masterOutput.expectMsg(TextMessage.Strict(s"!added-slave: $slaveSessionId"))
       slaveOutput.expectMsg(TextMessage.Strict(s"!set-master: $masterSessionId"))
-      // fullOutput.expectNoMsg()
+      fullOutput.expectNoMsg(50.milliseconds)
 
       master ! TextMessage.Strict("0: hello slaves")
-      slaveOutput.expectMsg(TextMessage.Strict("0: hello slaves"))
+      slaveOutput.expectMsg(TextMessage.Strict("hello slaves"))
+      masterOutput.expectNoMsg(50.milliseconds)
 
       slave ! TextMessage.Strict("0: hello master")
-      masterOutput.expectMsg(TextMessage.Strict("0: hello master"))
+      masterOutput.expectMsg(TextMessage.Strict("hello master"))
+      slaveOutput.expectNoMsg(50.milliseconds)
 
       // as usual a message from a client of the master session should go to output
       masterClients.keys.headOption.foreach { clientId =>
@@ -187,6 +191,21 @@ class HostConnectionSpec() extends TestKit(ActorSystem("HostConnectionSpec")) wi
 
         slaveOutput.expectMsg(TextMessage.Strict(s"$clientId: pong"))
         masterOutput.expectMsg(TextMessage.Strict(s"${2 + clientId}: pong"))
+      }
+
+      // a message from the host to a slave client should be forwarded from the master to the client host and sent to
+      // the client from there
+      slaveClients.keys.headOption.foreach { clientId =>
+        master ! TextMessage.Strict(s"${2 + clientId}: hello client")
+
+        slaveClients(clientId).expectMsg(HostConnection.Message(TextMessage.Strict("hello client")))
+      }
+
+      slaveClients.keys.headOption.foreach { clientId =>
+        slaveClients(clientId).ref ! PoisonPill
+
+        slaveOutput.expectMsg(TextMessage.Strict(s"disconnected: $clientId"))
+        masterOutput.expectMsg(TextMessage.Strict(s"disconnected: ${2 + clientId}"))
       }
     }
   }
