@@ -174,9 +174,14 @@ class HostConnectionSpec() extends TestKit(ActorSystem("HostConnectionSpec")) wi
       slaveOutput.expectMsg(TextMessage.Strict("hello slaves"))
       masterOutput.expectNoMsg(50.milliseconds)
 
-      slave ! TextMessage.Strict("0: hello master")
-      masterOutput.expectMsg(TextMessage.Strict("hello master"))
+      slave ! TextMessage.Strict("0: hello\nmaster")
+      masterOutput.expectMsg(TextMessage.Strict("hello\nmaster"))
       slaveOutput.expectNoMsg(50.milliseconds)
+
+      // big messages should be supported
+      val bigMessage = "M:QuestionsMessage;+++{\"Questions\":[{\"t\":\"Who is spending more money per head on helping people stop smoking despite the fact the number of quitters is falling?\",\"a\":[{\"c\":false,\"n\":1,\"t\":\"The BBC\",\"a\":\"/audios/58648/download\"},{\"c\":false,\"n\":2,\"t\":\"The FSA\",\"a\":\"/audios/62446/download\"},{\"c\":false,\"n\":3,\"t\":\"The WWF\",\"a\":\"/audios/62447/download\"},{\"c\":true,\"n\":4,\"t\":\"The NHS\",\"a\":\"/audios/62448/download\"}],\"b\":\"/audios/62445/download\",\"m\":\"\"},{\"t\":\"In athletics, how is the \\\"hop, step and jump\\\" normally known?\",\"a\":[{\"c\":false,\"n\":1,\"t\":\"High jump\",\"a\":\"/audios/52159/download\"},{\"c\":true,\"n\":2,\"t\":\"Triple jump\",\"a\":\"/audios/52160/download\"},{\"c\":false,\"n\":3,\"t\":\"Long jump\",\"a\":\"/audios/52161/download\"},{\"c\":false,\"n\":4,\"t\":\"Steeplechase\",\"a\":\"/audios/52162/download\"}],\"b\":\"/audios/52158/download\",\"m\":\"\"},{\"t\":\"Which businessman has donated 400,000 to Labour according to a party spokesman?\",\"a\":[{\"c\":false,\"n\":1,\"t\":\"Richard Branson\",\"a\":\"/audios/44905/download\"},{\"c\":true,\"n\":2,\"t\":\"Alan Sugar\",\"a\":\"/audios/44904/download\"},{\"c\":false,\"n\":3,\"t\":\"Stelios Haji-Ioannou\",\"a\":\"/audios/65057/download\"},{\"c\":false,\"n\":4,\"t\":\"Theo Paphitis\",\"a\":\"/audios/65058/download\"}],\"b\":\"/audios/65056/download\",\"m\":\"\"}]}"
+      slave ! TextMessage.Strict(s"0: $bigMessage")
+      masterOutput.expectMsg(TextMessage.Strict(bigMessage))
 
       // as usual a message from a client of the master session should go to output
       masterClients.keys.headOption.foreach { clientId =>

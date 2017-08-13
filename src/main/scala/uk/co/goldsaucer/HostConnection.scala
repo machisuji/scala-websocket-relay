@@ -19,12 +19,16 @@ object HostConnection {
 
   case class MasterSession(id: String, actor: ActorRef, secret: String = java.util.UUID.randomUUID().toString)
   case class SlaveSession(id: String, actor: ActorRef, numClients: Int, secret: String = java.util.UUID.randomUUID().toString)
+
+  val ToClient = """(?s)\A(\d+):\s(.+)\Z""".r
+  val Connected = """\Aconnected:\s(\d+)\Z""".r
+  val Disconnected = """\Adisconnected:\s(\d+)\Z""".r
 }
 
 class HostConnection(id: String, private var dummy: Boolean = false) extends Actor {
   import HostConnection.{
     RequestToJoin, OfferToJoin, AcceptOffer, DeclineOffer, ConfirmJoin,
-    MasterSession, SlaveSession
+    MasterSession, SlaveSession, ToClient, Connected, Disconnected
   }
 
   type ID = Int
@@ -130,8 +134,6 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
   }
 
   def messageFromHost(msg: TextMessage): Unit = {
-    val ToClient = """\A(\d+):\s(.+)\Z""".r
-
     msg.textStream.runForeach {
       case ToClient(id, message) => messageToClient(id.toInt, message)
       case "/join-session" => lookForSession()
@@ -146,10 +148,6 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
     */
   def messageFromSession(msg: TextMessage, session: ActorRef): Unit = {
     println(s"$id receives message from other session (${masterSession}): $msg")
-
-    val ToClient = """\A(\d+):\s(.+)\Z""".r
-    val Connected = """\Aconnected:\s(\d+)\Z""".r
-    val Disconnected = """\Adisconnected:\s(\d+)\Z""".r
 
     msg.textStream.runForeach {
       case ToClient(id, message) if id.toInt > 0 => messageToHost(s"${translateSlaveClientId(id.toInt, session)}: $message")
