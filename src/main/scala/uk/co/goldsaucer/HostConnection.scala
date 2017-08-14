@@ -8,6 +8,7 @@ object HostConnection {
   case class Init(actor: ActorRef)
   case class Connect(uuid: Option[String] = None)
   case class Message(textMessage: TextMessage)
+  case class Broadcast(textMessage: TextMessage)
 
   case class RequestToJoin(slaveSessionId: String, numClients: Int)
   case class OfferToJoin(masterSessionId: String, numClients: Int)
@@ -25,7 +26,7 @@ object HostConnection {
   val Disconnected = """\Adisconnected:\s(\d+)\Z""".r
 }
 
-class HostConnection(id: String, private var dummy: Boolean = false) extends Actor {
+class HostConnection(id: String, private var dummy: Boolean = false) extends Actor with Logs {
   import HostConnection.{
     RequestToJoin, OfferToJoin, AcceptOffer, DeclineOffer, ConfirmJoin,
     MasterSession, SlaveSession, ToClient, Connected, Disconnected
@@ -56,6 +57,7 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
     case msg: TextMessage                         => messageFromHost(msg)
     case ClientConnection.Message(clientId, msg)  => messageFromClient(clientId, msg, sender)
     case HostConnection.Message(msg)              => messageFromSession(msg, sender)
+    case HostConnection.Broadcast(msg)            => broadcastFromSession(msg, sender)
 
     case RequestToJoin(slaveSessionId, numClients) if allowMaster && sender != self => {
       handleJoinRequest(slaveSessionId, numClients, sender) // ignore self from broadcasts
@@ -146,15 +148,26 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
   /**
     * A message coming from another HostConnection session. I.e. a slave or master.
     */
-  def messageFromSession(msg: TextMessage, session: ActorRef): Unit = {
-    println(s"$id receives message from other session (${masterSession}): $msg")
+  def messageFromSession(msg: TextMessage, session: ActorRef, output: String => Unit = messageToHost): Unit = {
+    log.debug(s"$id receives message from other session (${masterSession}): $msg")
 
     msg.textStream.runForeach {
-      case ToClient(id, message) if id.toInt > 0 => messageToHost(s"${translateSlaveClientId(id.toInt, session)}: $message")
-      case Connected(id) => messageToHost(s"connected: ${translateSlaveClientId(id.toInt, session)}")
-      case Disconnected(id) => messageToHost(s"disconnected: ${translateSlaveClientId(id.toInt, session)}")
-      case other => messageToHost(other)
+      case ToClient(id, message) if id.toInt > 0 => output(s"${translateSlaveClientId(id.toInt, session)}: $message")
+      case Connected(id) => output(s"connected: ${translateSlaveClientId(id.toInt, session)}")
+      case Disconnected(id) => output(s"disconnected: ${translateSlaveClientId(id.toInt, session)}")
+      case other => output(other)
     }
+  }
+
+  def broadcastFromSession(msg: TextMessage, session: ActorRef): Unit = {
+    log.debug(s"$id broadcasting message from other session (${masterSession}): $msg")
+
+    def broadcast(message: String): Unit = {
+      messageToHost(message)
+      slaveSessions.filterNot(_.actor == session).foreach(_.actor ! HostConnection.Message(msg))
+    }
+
+    messageFromSession(msg, session, output = broadcast)
   }
 
   def translateSlaveClientId(
@@ -229,7 +242,7 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
     } else if (clientId == 0) {
       if (isSlave) {
         println(s"$id sending $msg to master (${masterSession.id})")
-        masterSession.actor ! HostConnection.Message(TextMessage(msg))
+        masterSession.actor ! HostConnection.Broadcast(TextMessage(msg))
       }
       if (isMaster) {
         println(s"$id sending $msg to slaves ($slaveSessions.values)")

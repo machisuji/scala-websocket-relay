@@ -17,6 +17,8 @@ class HostConnectionSpec() extends TestKit(ActorSystem("HostConnectionSpec")) wi
 
   private var nextSessionId: Int = 1
 
+  Log.level = Log.Level.Debug
+
   class Tee(target: ActorRef, listener: ActorRef) extends Actor {
     override def receive: Receive = {
       case "STOP!" =>
@@ -150,38 +152,53 @@ class HostConnectionSpec() extends TestKit(ActorSystem("HostConnectionSpec")) wi
       val fullSession @ Session(fullInput, fullOutput, full, fullSessionId) = createSession
       val masterSession @ Session(masterInput, masterOutput, master, masterSessionId) = createSession
       val slaveSession @ Session(slaveInput, slaveOutput, slave, slaveSessionId) = createSession
+      val otherSession @ Session(otherInput, otherOutput, other, otherSessionId) = createSession
 
       println("Full: " + fullSessionId)
       println("Master: " + masterSessionId)
       println("Slave: " + slaveSessionId)
+      println("Other: " + otherSessionId)
 
       val fullClients = connectClients(6, fullSession) // full session can only take 2 more while 3 try to join later
       val masterClients = connectClients(2, masterSession) // have 2 clients connected to the master
       val slaveClients = connectClients(3, slaveSession) // and 3 clients connected ot the slave
+      val otherClients = connectClients(1, otherSession)
 
       masterSession.send(TextMessage.Strict("/join-session master"))
       slaveSession.send(TextMessage.Strict("/join-session slave"))
 
-      fullInput.expectMsg(HostConnection.RequestToJoin(slaveSessionId, 3))
-      masterInput.expectMsg(HostConnection.RequestToJoin(slaveSessionId, 3))
-      slaveInput.expectMsg(HostConnection.RequestToJoin(slaveSessionId, 3)) // broadcast goes to itself too, will be ignored though
+      fullInput.expectMsg(HostConnection.RequestToJoin(slaveSessionId, slaveClients.size))
+      masterInput.expectMsg(HostConnection.RequestToJoin(slaveSessionId, slaveClients.size))
+      slaveInput.expectMsg(HostConnection.RequestToJoin(slaveSessionId, slaveClients.size)) // broadcast goes to itself too, will be ignored though
+      otherInput.expectMsg(HostConnection.RequestToJoin(slaveSessionId, slaveClients.size))
+
+      otherSession.send(TextMessage.Strict("/join-session slave"))
+
+      fullInput.expectMsg(HostConnection.RequestToJoin(otherSessionId, otherClients.size))
+      masterInput.expectMsg(HostConnection.RequestToJoin(otherSessionId, otherClients.size))
+      otherInput.expectMsg(HostConnection.RequestToJoin(otherSessionId, otherClients.size)) // broadcast goes to itself too, will be ignored though
 
       masterOutput.expectMsg(TextMessage.Strict(s"!added-slave: $slaveSessionId"))
+      masterOutput.expectMsg(TextMessage.Strict(s"!added-slave: $otherSessionId"))
       slaveOutput.expectMsg(TextMessage.Strict(s"!set-master: $masterSessionId"))
+      otherOutput.expectMsg(TextMessage.Strict(s"!set-master: $masterSessionId"))
       fullOutput.expectNoMsg(50.milliseconds)
 
       master ! TextMessage.Strict("0: hello slaves")
       slaveOutput.expectMsg(TextMessage.Strict("hello slaves"))
+      otherOutput.expectMsg(TextMessage.Strict("hello slaves"))
       masterOutput.expectNoMsg(50.milliseconds)
 
       slave ! TextMessage.Strict("0: hello\nmaster")
       masterOutput.expectMsg(TextMessage.Strict("hello\nmaster"))
+      otherOutput.expectMsg(TextMessage.Strict("hello\nmaster"))
       slaveOutput.expectNoMsg(50.milliseconds)
 
       // big messages should be supported
       val bigMessage = "M:QuestionsMessage;+++{\"Questions\":[{\"t\":\"Who is spending more money per head on helping people stop smoking despite the fact the number of quitters is falling?\",\"a\":[{\"c\":false,\"n\":1,\"t\":\"The BBC\",\"a\":\"/audios/58648/download\"},{\"c\":false,\"n\":2,\"t\":\"The FSA\",\"a\":\"/audios/62446/download\"},{\"c\":false,\"n\":3,\"t\":\"The WWF\",\"a\":\"/audios/62447/download\"},{\"c\":true,\"n\":4,\"t\":\"The NHS\",\"a\":\"/audios/62448/download\"}],\"b\":\"/audios/62445/download\",\"m\":\"\"},{\"t\":\"In athletics, how is the \\\"hop, step and jump\\\" normally known?\",\"a\":[{\"c\":false,\"n\":1,\"t\":\"High jump\",\"a\":\"/audios/52159/download\"},{\"c\":true,\"n\":2,\"t\":\"Triple jump\",\"a\":\"/audios/52160/download\"},{\"c\":false,\"n\":3,\"t\":\"Long jump\",\"a\":\"/audios/52161/download\"},{\"c\":false,\"n\":4,\"t\":\"Steeplechase\",\"a\":\"/audios/52162/download\"}],\"b\":\"/audios/52158/download\",\"m\":\"\"},{\"t\":\"Which businessman has donated 400,000 to Labour according to a party spokesman?\",\"a\":[{\"c\":false,\"n\":1,\"t\":\"Richard Branson\",\"a\":\"/audios/44905/download\"},{\"c\":true,\"n\":2,\"t\":\"Alan Sugar\",\"a\":\"/audios/44904/download\"},{\"c\":false,\"n\":3,\"t\":\"Stelios Haji-Ioannou\",\"a\":\"/audios/65057/download\"},{\"c\":false,\"n\":4,\"t\":\"Theo Paphitis\",\"a\":\"/audios/65058/download\"}],\"b\":\"/audios/65056/download\",\"m\":\"\"}]}"
       slave ! TextMessage.Strict(s"0: $bigMessage")
       masterOutput.expectMsg(TextMessage.Strict(bigMessage))
+      otherOutput.expectMsg(TextMessage.Strict(bigMessage))
 
       // as usual a message from a client of the master session should go to output
       masterClients.keys.headOption.foreach { clientId =>
