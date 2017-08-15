@@ -141,6 +141,7 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
       case "/join-session" => lookForSession()
       case "/join-session master" => lookForSession(slave = false)
       case "/join-session slave" => lookForSession(master = false)
+      case "/close-session" => closeSession()
       case _ => messageToHost("invalid")
     }
   }
@@ -192,6 +193,14 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
     }
 
     maxLocalClients = clients.size // don't allow any new clients to join once session joining is active
+  }
+
+  /**
+    * Close the session not allowing it to join or be joined by any other sessions.
+    */
+  def closeSession(): Unit = {
+    allowMaster = false
+    allowSlave = false
   }
 
   def handleJoinRequest(slaveSessionId: String, numClients: Int, sender: ActorRef): Unit = {
