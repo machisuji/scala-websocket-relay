@@ -73,6 +73,10 @@
                 any clients wanting to connect to it.
             </li>
             <li>
+              <span class="code">secret: &lt;secret&gt;</span> - Sent as the 2nd message from the relay to the
+              connected host. The host can take over this session from a new connection using this secret.
+            </li>
+            <li>
                 <span class="code">connected: &lt;client-id&gt;</span> - Sent to the host when a client connects
                 to the relay.
             </li>
@@ -120,40 +124,39 @@
   </div>
 </section>
 
-<section class="section">
-    <h1 class="title">Test</h1>
+<section class="hero is-info">
+  <div class="hero-body">
+    <div class="container">
+      <h1 class="title">Test</h1>
 
-    <table>
-      <tr>
-        <th class="host-header">Host</th>
-        <th class="client-1-header">Client 1</th>
-        <th class="client-2-header">Client 2</th>
-      </tr>
-      <tr>
-        <td>
-          <input id="host-input" placeholder="Input"></input>
-        </td>
-        <td>
-          <input id="client-1-input" placeholder="input"></input>
-          <button id="client-1-connect">Connect</button>
-        </td>
-        <td>
-          <input id="client-2-input" placeholder="input"></input>
-          <button id="client-2-connect">Connect</button>
-        </td>
-      </tr>
-      <tr>
-        <td>
+      <div class="columns">
+        <div class="column">
+          <h2 class="subtitle">Host</h2>
           <div id="host-output">&nbsp;</div>
-        </td>
-        <td>
+          <div style="border-top: 1px solid white; margin-top: 1em;">
+            <input id="host-input" placeholder="Input"></input>
+            <button id="host-start">Start</button>
+          </div>
+        </div>
+        <div class="column">
+          <h2 class="subtitle">Client 1</h2>
           <div id="client-1-output">&nbsp;</div>
-        </td>
-        <td>
+          <div style="border-top: 1px solid white; margin-top: 1em;">
+            <input id="client-1-input" placeholder="input"></input>
+            <button id="client-1-connect">Connect</button>
+          </div>
+        </div>
+        <div class="column">
+          <h2 class="subtitle">Client 2</h2>
           <div id="client-2-output">&nbsp;</div>
-        </td>
-      </tr>
-    </table>
+          <div style="border-top: 1px solid white; margin-top: 1em;">
+            <input id="client-2-input" placeholder="input"></input>
+            <button id="client-2-connect">Connect</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </section>
 </body>
 

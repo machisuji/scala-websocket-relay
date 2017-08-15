@@ -70,13 +70,17 @@ class HostConnectionSpec() extends TestKit(ActorSystem("HostConnectionSpec")) wi
   }
 
   "A HostConnection" must {
-    "send the session ID to the connecting host" in {
+    "send the session ID and secret to the connecting host" in {
       val sessionId = "42"
       val host = system.actorOf(Props(new HostConnection(sessionId)), s"session:$sessionId")
 
       host ! HostConnection.Init(self)
 
       expectMsg(TextMessage.Strict("session: 42"))
+
+      val secretMsg = expectMsgAnyClassOf(classOf[TextMessage.Strict])
+
+      secretMsg.text should startWith ("secret: ")
 
       host ! PoisonPill
     }

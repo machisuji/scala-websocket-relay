@@ -1,11 +1,39 @@
-$(document).ready(function() {
-  var socket = new WebSocket(baseURL + "/session?keepAlive=keepAlive");
+$.fn.enterKey = function (fnc) {
+    return this.each(function () {
+        $(this).keypress(function (ev) {
+            var keycode = (ev.keyCode ? ev.keyCode : ev.which);
+            if (keycode == '13') {
+                fnc.call(this, ev);
+            }
+        })
+    })
+}
+
+$("#host-start").click(function() {
+  var url = baseURL + "/session?keepAlive=keepAlive";
+  var info = $("#host-input").val();
+
+  if (info.indexOf("/connect ") != -1 && info.indexOf(":") != -1) {
+    var i = info.substring(9).split(":");
+    var id = i[0];
+    var secret = i[1];
+
+    url = url + "&id=" + id + "&secret=" + secret;
+
+    alert("Trying to take over session " + id);
+  }
+
+  var socket = new WebSocket(url);
+  var scrollToBottom = function() {
+    $("html, body").animate({ scrollTop: $(document).height() }, "slow");
+  };
 
   socket.onmessage = function(e) {
     var response = e.data;
 
     if (response != "keepAlive") {
       $("#host-output").append(response + "</br>");
+      scrollToBottom();
     }
     console.log("host received message: " + response);
 
@@ -20,6 +48,7 @@ $(document).ready(function() {
 
           if (message != "keepAlive") {
             $("#client-1-output").append(message + "</br>");
+            scrollToBottom();
           }
           console.log("client 1 received message: " + message);
         };
@@ -30,9 +59,10 @@ $(document).ready(function() {
 
         client.onclose = function(e) {
           $("#client-1-output").append("connection failed");
+          scrollToBottom();
         };
 
-        $("#client-1-input").change(function() {
+        $("#client-1-input").enterKey(function() {
           var message = $(this).val();
 
           client.send(message);
@@ -50,6 +80,7 @@ $(document).ready(function() {
 
           if (message != "keepAlive") {
             $("#client-2-output").append(message + "</br>");
+            scrollToBottom();
           }
           console.log("client 2 received message: " + message);
         };
@@ -60,9 +91,10 @@ $(document).ready(function() {
 
         client2.onclose = function(e) {
           $("#client-2-output").append("connection failed");
+          scrollToBottom();
         };
 
-        $("#client-2-input").change(function() {
+        $("#client-2-input").enterKey(function() {
           var message = $(this).val();
 
           client2.send(message);
@@ -78,10 +110,12 @@ $(document).ready(function() {
     $("#host-output").append("connection failed");
   };
 
-  $("#host-input").change(function() {
+  $("#host-input").enterKey(function() {
     var message = $(this).val();
 
     socket.send(message);
     console.log("host sent message: " + message);
+
+    $(this).val("");
   });
 });

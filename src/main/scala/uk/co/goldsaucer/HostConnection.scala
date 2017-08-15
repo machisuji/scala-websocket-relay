@@ -3,12 +3,17 @@ package uk.co.goldsaucer
 import akka.actor.{Actor, ActorRef, PoisonPill, Terminated}
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.stream.ActorMaterializer
+import uk.co.goldsaucer.HostConnection.RejectTakeOver
 
 object HostConnection {
   case class Init(actor: ActorRef)
   case class Connect(uuid: Option[String] = None)
   case class Message(textMessage: TextMessage)
   case class Broadcast(textMessage: TextMessage)
+
+  case class TakeOver(secret: String)
+  case object AcceptTakeOver
+  case object RejectTakeOver
 
   case class RequestToJoin(slaveSessionId: String, numClients: Int)
   case class OfferToJoin(masterSessionId: String, numClients: Int)
@@ -18,7 +23,7 @@ object HostConnection {
 
   val maxClients: Int = sys.env.get("MAX_CLIENTS").map(_.toInt).getOrElse(8)
 
-  case class MasterSession(id: String, actor: ActorRef, secret: String = java.util.UUID.randomUUID().toString)
+  case class MasterSession(id: String, actor: ActorRef)
   case class SlaveSession(id: String, actor: ActorRef, numClients: Int, secret: String = java.util.UUID.randomUUID().toString)
 
   val ToClient = """(?s)\A(\d+):\s(.+)\Z""".r
@@ -26,10 +31,14 @@ object HostConnection {
   val Disconnected = """\Adisconnected:\s(\d+)\Z""".r
 }
 
-class HostConnection(id: String, private var dummy: Boolean = false) extends Actor with Logs {
+class HostConnection(
+  id: String,
+  private var dummy: Boolean = false,
+  val secret: String = java.util.UUID.randomUUID().toString
+) extends Actor with Logs {
   import HostConnection.{
     RequestToJoin, OfferToJoin, AcceptOffer, DeclineOffer, ConfirmJoin,
-    MasterSession, SlaveSession, ToClient, Connected, Disconnected
+    MasterSession, SlaveSession, ToClient, Connected, Disconnected, TakeOver
   }
 
   type ID = Int
@@ -52,6 +61,7 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
 
   def receive = {
     case HostConnection.Init(actor)               => init(actor)
+    case TakeOver(secret)                         => handleTakeOver(secret, sender)
     case HostConnection.Connect(clientId)         => clientConnected(sender(), clientId)
     case Terminated(client)                       => clientDisconnected(client)
     case msg: TextMessage                         => messageFromHost(msg)
@@ -71,6 +81,17 @@ class HostConnection(id: String, private var dummy: Boolean = false) extends Act
     output = actor
 
     actor ! TextMessage("session: " + id)
+    actor ! TextMessage("secret: " + secret)
+  }
+
+  def handleTakeOver(secret: String, sender: ActorRef): Unit = {
+    if (secret == this.secret) {
+      log.info(s"take-over of $id using secret $secret")
+      sender ! AcceptOffer
+    } else {
+      log.info(s"failed take-over attempt of $id using secret $secret")
+      sender ! RejectTakeOver
+    }
   }
 
   def wantsToJoin: Boolean = allowMaster || allowSlave

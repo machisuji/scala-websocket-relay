@@ -26,28 +26,53 @@ object WebSocketRelay extends App {
   implicit val system = ActorSystem()
   implicit val materializer = ActorMaterializer()
 
-  def hostFlow(sessionId: Option[String] = None, keepAlive: Option[String] = None): Flow[Message, Message, NotUsed] = {
+  def hostFlow(
+    sessionId: Option[String] = None,
+    keepAlive: Option[String] = None,
+    secret: Option[String]
+  ): Option[Flow[Message, Message, NotUsed]] = {
+    implicit val timeout = Timeout(1 second)
+    import scala.concurrent.ExecutionContext.Implicits.global
+    import akka.pattern.ask
+
     val id = sessionId.getOrElse(java.util.UUID.randomUUID.toString)
-    val session = system.actorOf(
+
+    def existingSession = system
+      .actorSelection(s"user/session:$id")
+      .resolveOne()
+      .flatMap(session =>
+        (session ? HostConnection.TakeOver(secret.getOrElse("")))
+          .filter(_ == HostConnection.AcceptOffer)
+          .map(_ => session))
+
+    def newSession = system.actorOf(
       Props(new HostConnection(id)),
       s"session:$id"
     )
 
-    val incomingMessages: Sink[Message, NotUsed] =
-      Flow[Message].to(Sink.actorRef[Message](session, PoisonPill))
+    val _session =
+      if (sessionId.isDefined) existingSession
+      else Future { newSession }
 
-    val outgoingMessages: Source[Message, NotUsed] =
-      Source.actorRef[Message](10, OverflowStrategy.fail)
-        .mapMaterializedValue { outActor =>
-          session ! HostConnection.Init(outActor)
-          NotUsed
-        }
+    val f = _session.map { session =>
+      val incomingMessages: Sink[Message, NotUsed] =
+        Flow[Message].to(Sink.actorRef[Message](session, PoisonPill))
 
-    val flow = Flow.fromSinkAndSource(incomingMessages, outgoingMessages)
+      val outgoingMessages: Source[Message, NotUsed] =
+        Source.actorRef[Message](10, OverflowStrategy.fail)
+          .mapMaterializedValue { outActor =>
+            session ! HostConnection.Init(outActor)
+            NotUsed
+          }
 
-    keepAlive
-      .map(message => flow.keepAlive(30 seconds, () => TextMessage(message)))
-      .getOrElse(flow)
+      val flow = Flow.fromSinkAndSource(incomingMessages, outgoingMessages)
+
+      keepAlive
+        .map(message => flow.keepAlive(30 seconds, () => TextMessage(message)))
+        .orElse(Some(flow))
+    }
+
+    Await.result(f.fallbackTo(Future { None }), 1 second)
   }
 
   def clientFlow(
@@ -119,7 +144,10 @@ object WebSocketRelay extends App {
       val query = Query(req.uri.rawQueryString)
 
       req.header[UpgradeToWebSocket] match {
-        case Some(upgrade) => upgrade.handleMessages(hostFlow(query.get("id"), query.get("keepAlive")))
+        case Some(upgrade) =>
+          hostFlow(query.get("id"), query.get("keepAlive"), query.get("secret"))
+            .map(flow => upgrade.handleMessages(flow))
+            .getOrElse(HttpResponse(404, entity = "Could not connect to session (not found or invalid secret)"))
         case None          => HttpResponse(400, entity = "Not a valid websocket request!")
       }
     case req @ HttpRequest(GET, uri, _, _, _) if uri.path.toString().startsWith("/session/") =>
