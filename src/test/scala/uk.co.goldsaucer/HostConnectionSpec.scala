@@ -51,6 +51,10 @@ class HostConnectionSpec() extends TestKit(ActorSystem("HostConnectionSpec")) wi
 
     output.expectMsg(TextMessage.Strict(s"session: $sessionId"))
 
+    val secretMsg = output.expectMsgAnyClassOf(classOf[TextMessage.Strict])
+
+    secretMsg.text should startWith ("secret: ")
+
     Session(input, output, tee, sessionId)
   }
 
