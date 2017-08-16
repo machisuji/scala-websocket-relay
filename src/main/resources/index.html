@@ -36,7 +36,7 @@
               <span class="code">GET /</span> - This page
           </li>
           <li>
-              <span class="code">GET /session[?id=&lt;id&gt;&amp;&secret=&lt;secret&gt;&amp;keepAlive=str] {Upgrade}</span> - WebSocket connection for the host.
+              <span class="code">GET /session[?id=&lt;id&gt;][&amp;secret=&lt;secret&gt;][&amp;keepAlive=str] {Upgrade}</span> - WebSocket connection for the host.
               <span class="code">id</span> is an optional parameter useful when you want to reconnect to the same session
               or determine the session id yourself. If ommitted a session ID will be generated. If given together with a
               <span class="code">secret</span> the server will try to connect to an existing session and take it over.
