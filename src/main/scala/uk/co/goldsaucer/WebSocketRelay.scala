@@ -51,7 +51,7 @@ object WebSocketRelay extends App {
     )
 
     val _session =
-      if (sessionId.isDefined) existingSession
+      if (sessionId.isDefined && secret.isDefined) existingSession
       else Future { newSession }
 
     val f = _session.map { session =>
