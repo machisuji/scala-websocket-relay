@@ -30,28 +30,30 @@
     <p class="subtitle">
       The Relay's API endpoints
     </p>
-    <ul>
-        <li>
-            <span class="code">GET /</span> - This page
-        </li>
-        <li>
-            <span class="code">GET /session[?id=&lt;id&gt;&amp;&secret=&lt;secret&gt;&amp;keepAlive=str] {Upgrade}</span> - WebSocket connection for the host.
-            <span class="code">id</span> is an optional parameter useful when you want to reconnect to the same session
-            or determine the session id yourself. If ommitted a session ID will be generated. If given together with a
-            <span class="code">secret</span> the server will try to connect to an existing session and take it over.
-            If <span class="code">keepAlive</span> is present <span class="code">"str"</span> is sent to the host every
-            30s to make sure the connection is kept alive.
-        </li>
-        <li>
-            <span class="code">GET /session/:id[?keepAlive=str][&amp;dummyFallback=true][&amp;client=&lt;uuid&gt;] {Upgrade}</span> - WebSocket connection for clients.
-            Any messages sent to this socket will be relayed to the host which connected through
-            <span class="code">/session</span> to the session with the given ID.
-            If <span class="code">keepAlive</span> is present <span class="code">"str"</span> is sent to the client every
-            30s to make sure the connection is kept alive.
-            If <span class="code">dummyFallback</span> is true then a client can connect to a session even
-            if there is none. A dummy session will be opened which will just consume messages.
-        </li>
-    </ul>
+    <div class="content">
+      <ul>
+          <li>
+              <span class="code">GET /</span> - This page
+          </li>
+          <li>
+              <span class="code">GET /session[?id=&lt;id&gt;&amp;&secret=&lt;secret&gt;&amp;keepAlive=str] {Upgrade}</span> - WebSocket connection for the host.
+              <span class="code">id</span> is an optional parameter useful when you want to reconnect to the same session
+              or determine the session id yourself. If ommitted a session ID will be generated. If given together with a
+              <span class="code">secret</span> the server will try to connect to an existing session and take it over.
+              If <span class="code">keepAlive</span> is present <span class="code">"str"</span> is sent to the host every
+              30s to make sure the connection is kept alive.
+          </li>
+          <li>
+              <span class="code">GET /session/:id[?keepAlive=str][&amp;dummyFallback=true][&amp;client=&lt;uuid&gt;] {Upgrade}</span> - WebSocket connection for clients.
+              Any messages sent to this socket will be relayed to the host which connected through
+              <span class="code">/session</span> to the session with the given ID.
+              If <span class="code">keepAlive</span> is present <span class="code">"str"</span> is sent to the client every
+              30s to make sure the connection is kept alive.
+              If <span class="code">dummyFallback</span> is true then a client can connect to a session even
+              if there is none. A dummy session will be opened which will just consume messages.
+          </li>
+      </ul>
+    </div>
   </div>
 </section>
 
@@ -67,55 +69,59 @@
     <div class="columns">
       <div class="column">
         <h2 class="subtitle">Messages (Server &rarr; Host)</h2>
-        <ul>
-            <li>
-                <span class="code">session: &lt;session-id&gt;</span> - Sent as the first message from the relay
-                (this) server to the connecting host to identify the created session. The host has to give this ID to
-                any clients wanting to connect to it.
-            </li>
-            <li>
-              <span class="code">secret: &lt;secret&gt;</span> - Sent as the 2nd message from the relay to the
-              connected host. The host can take over this session from a new connection using this secret.
-            </li>
-            <li>
-                <span class="code">connected: &lt;client-id&gt;</span> - Sent to the host when a client connects
-                to the relay.
-            </li>
-            <li>
-                <span class="code">disconnected: &lt;client-id&gt;</span> - Sent to the host when a client
-                disconnects from the relay.
-            </li>
-            <li>
-                <span class="code">&lt;client-id&gt;: &lt;message&gt;</span> - Message from the host to the client
-                with the given ID or the other way around. Meaning this is the message a host has to send to relay
-                a message to a client and at the same time this is the message a host will receive if a client
-                wants to relay a message to it.
-                Only the <span class="code">&lt;message&gt;</span> part will be sent to the client.
-            </li>
-            <li>
-                <span class="code">unknown: &lt;client-id&gt;</span> - Response to the host when it tried
-                sending a message to an unknown client.
-            </li>
-            <li>
-                <span class="code">invalid</span> - Sent to the host when it sent a message that the relay
-                did not understand.
-            </li>
-        </ul>
+        <div class="content">
+          <ul>
+              <li>
+                  <span class="code">session: &lt;session-id&gt;</span> - Sent as the first message from the relay
+                  (this) server to the connecting host to identify the created session. The host has to give this ID to
+                  any clients wanting to connect to it.
+              </li>
+              <li>
+                <span class="code">secret: &lt;secret&gt;</span> - Sent as the 2nd message from the relay to the
+                connected host. The host can take over this session from a new connection using this secret.
+              </li>
+              <li>
+                  <span class="code">connected: &lt;client-id&gt;</span> - Sent to the host when a client connects
+                  to the relay.
+              </li>
+              <li>
+                  <span class="code">disconnected: &lt;client-id&gt;</span> - Sent to the host when a client
+                  disconnects from the relay.
+              </li>
+              <li>
+                  <span class="code">&lt;client-id&gt;: &lt;message&gt;</span> - Message from the host to the client
+                  with the given ID or the other way around. Meaning this is the message a host has to send to relay
+                  a message to a client and at the same time this is the message a host will receive if a client
+                  wants to relay a message to it.
+                  Only the <span class="code">&lt;message&gt;</span> part will be sent to the client.
+              </li>
+              <li>
+                  <span class="code">unknown: &lt;client-id&gt;</span> - Response to the host when it tried
+                  sending a message to an unknown client.
+              </li>
+              <li>
+                  <span class="code">invalid</span> - Sent to the host when it sent a message that the relay
+                  did not understand.
+              </li>
+          </ul>
+        </div>
       </div>
       <div class="column">
         <h2 class="subtitle">Commands (Host &rarr; Server)</h2>
-        <ul>
-          <li>
-            <span class="code">/join-session [master | slave]</span> - Starts looking to join with another session either
-            as a master or a slave. Given the respective options it can be forced which role the host wants to take.
-            I.e. <span class="code">/join-session slave</span> does not allow other sessions to join but only tries to
-            join other sessions.
-          </li>
-          <li>
-            <span class="code">/close-session</span> - Closes the session to join attempts by other sessions and also
-            stops trying to join other sessions.
-          </li>
-        </ul>
+        <div class="content">
+          <ul>
+            <li>
+              <span class="code">/join-session [master | slave]</span> - Starts looking to join with another session either
+              as a master or a slave. Given the respective options it can be forced which role the host wants to take.
+              I.e. <span class="code">/join-session slave</span> does not allow other sessions to join but only tries to
+              join other sessions.
+            </li>
+            <li>
+              <span class="code">/close-session</span> - Closes the session to join attempts by other sessions and also
+              stops trying to join other sessions.
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
     <h2 class="subtitle">Client Messages</h2>
@@ -129,6 +135,7 @@
   <div class="hero-body">
     <div class="container">
       <h1 class="title">Test</h1>
+      <h2 class="subtitle">You can test the interaction between servers and clients, and servers among themselves here.</h2>
 
       <div class="columns host host-1">
         <div class="column">
