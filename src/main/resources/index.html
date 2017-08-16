@@ -35,9 +35,10 @@
             <span class="code">GET /</span> - This page
         </li>
         <li>
-            <span class="code">GET /session[?id=&lt;id&gt;&amp;keepAlive=str] {Upgrade}</span> - WebSocket connection for the host.
-            <span class="code">id</span> is an optional parameter useful when you want to reconnect to the same session.
-            If ommitted a session ID will be generated.
+            <span class="code">GET /session[?id=&lt;id&gt;&amp;&secret=&lt;secret&gt;&amp;keepAlive=str] {Upgrade}</span> - WebSocket connection for the host.
+            <span class="code">id</span> is an optional parameter useful when you want to reconnect to the same session
+            or determine the session id yourself. If ommitted a session ID will be generated. If given together with a
+            <span class="code">secret</span> the server will try to connect to an existing session and take it over.
             If <span class="code">keepAlive</span> is present <span class="code">"str"</span> is sent to the host every
             30s to make sure the connection is kept alive.
         </li>
@@ -117,7 +118,7 @@
         </ul>
       </div>
     </div>
-    <h3>Client Messages</h3>
+    <h2 class="subtitle">Client Messages</h2>
     <p>
         Messages from clients are relayed as-is to the server listening to the given session.
     </p>
@@ -129,29 +130,57 @@
     <div class="container">
       <h1 class="title">Test</h1>
 
-      <div class="columns">
+      <div class="columns host host-1">
         <div class="column">
-          <h2 class="subtitle">Host</h2>
-          <div id="host-output">&nbsp;</div>
+          <h2 class="subtitle">Host 1</h2>
+          <textarea id="host-1-output" readonly></textarea>
           <div style="border-top: 1px solid white; margin-top: 1em;">
-            <input id="host-input" placeholder="Input"></input>
-            <button id="host-start">Start</button>
+            <input id="host-1-input" placeholder="Input"></input>
+            <button id="host-1-start">Start</button>
           </div>
         </div>
         <div class="column">
           <h2 class="subtitle">Client 1</h2>
-          <div id="client-1-output">&nbsp;</div>
+          <textarea id="client-1-output" readonly></textarea>
           <div style="border-top: 1px solid white; margin-top: 1em;">
             <input id="client-1-input" placeholder="input"></input>
-            <button id="client-1-connect">Connect</button>
+            <button id="client-1-connect" disabled>Connect</button>
           </div>
         </div>
         <div class="column">
           <h2 class="subtitle">Client 2</h2>
-          <div id="client-2-output">&nbsp;</div>
+          <textarea id="client-2-output" readonly></textarea>
           <div style="border-top: 1px solid white; margin-top: 1em;">
             <input id="client-2-input" placeholder="input"></input>
-            <button id="client-2-connect">Connect</button>
+            <button id="client-2-connect" disabled>Connect</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="container host host-2">
+      <div class="columns">
+        <div class="column">
+          <h2 class="subtitle">Host 2</h2>
+          <textarea id="host-2-output" readonly></textarea>
+          <div style="border-top: 1px solid white; margin-top: 1em;">
+            <input id="host-2-input" placeholder="Input"></input>
+            <button id="host-2-start">Start</button>
+          </div>
+        </div>
+        <div class="column">
+          <h2 class="subtitle">Client 3</h2>
+          <textarea id="client-3-output" readonly></textarea>
+          <div style="border-top: 1px solid white; margin-top: 1em;">
+            <input id="client-3-input" placeholder="input"></input>
+            <button id="client-3-connect" disabled>Connect</button>
+          </div>
+        </div>
+        <div class="column">
+          <h2 class="subtitle">Client 4</h2>
+          <textarea id="client-4-output" readonly></textarea>
+          <div style="border-top: 1px solid white; margin-top: 1em;">
+            <input id="client-4-input" placeholder="input"></input>
+            <button id="client-4-connect" disabled>Connect</button>
           </div>
         </div>
       </div>

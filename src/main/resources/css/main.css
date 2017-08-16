@@ -3,3 +3,19 @@
     background-color: #DDDDDD;
     padding: 2px;
 }
+
+.host-2 {
+    border-top: 1px dashed white;
+    margin-top: 2em;
+    padding-top: 2em;
+}
+
+.host input {
+    width: 70%;
+}
+
+.host textarea {
+    width: 100%;
+    height: 12em;
+    padding: 0.5em;
+}
