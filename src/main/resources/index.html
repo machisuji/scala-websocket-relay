@@ -120,6 +120,13 @@
               <span class="code">/close-session</span> - Closes the session to join attempts by other sessions and also
               stops trying to join other sessions.
             </li>
+            <li>
+              <span class="code">/leave-session</span> - Leaves any connected sessions. If master it will disconnect
+              all slaves and send them a notification <span class="code">!master-left</span>. If a slave, it will leave
+              the master session and the master host will get a notification <span class="code">!slave left: &lt;session-id&gt;</span>.
+              In either case on each side the session will stop looking to join or have another session join.
+              Potentially to allow for a reconnect of the previously disconnected session.
+            </li>
           </ul>
         </div>
       </div>

@@ -29,6 +29,8 @@ object HostConnection {
   val ToClient = """(?s)\A(\d+):\s(.+)\Z""".r
   val Connected = """\Aconnected:\s(\d+)\Z""".r
   val Disconnected = """\Adisconnected:\s(\d+)\Z""".r
+  val MasterLeft = """\A!master-left\Z""".r
+  val SlaveLeft = """\A!slave-left: ([\w\-]+)\Z""".r
 }
 
 class HostConnection(
@@ -38,7 +40,8 @@ class HostConnection(
 ) extends Actor with Logs {
   import HostConnection.{
     RequestToJoin, OfferToJoin, AcceptOffer, DeclineOffer, ConfirmJoin,
-    MasterSession, SlaveSession, ToClient, Connected, Disconnected, TakeOver
+    MasterSession, SlaveSession, ToClient, Connected, Disconnected, TakeOver,
+    MasterLeft, SlaveLeft
   }
 
   type ID = Int
@@ -163,6 +166,7 @@ class HostConnection(
       case "/join-session master" => lookForSession(slave = false)
       case "/join-session slave" => lookForSession(master = false)
       case "/close-session" => closeSession()
+      case "/leave-session" => leaveSession()
       case _ => messageToHost("invalid")
     }
   }
@@ -177,6 +181,8 @@ class HostConnection(
       case ToClient(id, message) if id.toInt > 0 => output(s"${translateSlaveClientId(id.toInt, session)}: $message")
       case Connected(id) => output(s"connected: ${translateSlaveClientId(id.toInt, session)}")
       case Disconnected(id) => output(s"disconnected: ${translateSlaveClientId(id.toInt, session)}")
+      case MasterLeft() => masterLeft(output)
+      case SlaveLeft(sessionId) => slaveLeft(sessionId, output)
       case other => output(other)
     }
   }
@@ -222,6 +228,42 @@ class HostConnection(
   def closeSession(): Unit = {
     allowMaster = false
     allowSlave = false
+  }
+
+  def leaveSession(): Unit = {
+    if (isMaster) {
+      slaveSessions.foreach(_.actor ! HostConnection.Message(TextMessage.Strict("!master-left")))
+
+      slaveSessions = IndexedSeq.empty
+    } else if (isSlave) {
+      masterSession.actor ! HostConnection.Message(TextMessage.Strict(s"!slave-left: $id"))
+
+      masterSession = null
+    }
+
+    stopLookingForSession()
+  }
+
+  def masterLeft(output: String => Unit): Unit = {
+    masterSession = null
+
+    stopLookingForSession()
+
+    output("!master-left")
+  }
+
+  def slaveLeft(sessionId: String, output: String => Unit): Unit = {
+    slaveSessions = slaveSessions.filter(_.id != sessionId)
+
+    stopLookingForSession()
+
+    output(s"!slave-left $sessionId")
+  }
+
+  def stopLookingForSession(): Unit = {
+    allowMaster = false
+    allowSlave = false
+    maxLocalClients = HostConnection.maxClients
   }
 
   def handleJoinRequest(slaveSessionId: String, numClients: Int, sender: ActorRef): Unit = {
