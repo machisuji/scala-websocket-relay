@@ -144,7 +144,7 @@ class HostConnection(
       .headOption // get smallest one if possible
 
   def clientDisconnected(client: ActorRef): Unit = {
-    println(s"disconnected: $client")
+    log.info(s"disconnected: $client")
     clients.find(_._2 == client).foreach {
       case (clientId, client) =>
         val msg = s"disconnected: $clientId"
@@ -277,10 +277,10 @@ class HostConnection(
 
   def handleJoinRequest(slaveSessionId: String, numClients: Int, sender: ActorRef): Unit = {
     if (acceptJoinRequest(slaveSessionId, numClients)) {
-      println(s"$id accepts join request from $slaveSessionId")
+      log.debug(s"$id accepts join request from $slaveSessionId")
       sender ! OfferToJoin(id, numClients)
     } else {
-      println(s"$id denies join request from $slaveSessionId")
+      log.debug(s"$id denies join request from $slaveSessionId")
     }
   }
 
@@ -289,7 +289,7 @@ class HostConnection(
   }
 
   def joinSession(masterSessionId: String, sender: ActorRef, numClients: Int): Unit = {
-    println(s"$id received offer to join $masterSessionId")
+    log.debug(s"$id received offer to join $masterSessionId")
 
     if (isSlave || clients.size > numClients) {
       sender ! DeclineOffer(id)
@@ -322,15 +322,15 @@ class HostConnection(
       client ! HostConnection.Message(TextMessage(msg))
     } else if (clientId == 0) {
       if (isSlave) {
-        println(s"$id sending $msg to master (${masterSession.id})")
+        log.debug(s"$id sending $msg to master (${masterSession.id})")
         masterSession.actor ! HostConnection.Broadcast(TextMessage(msg))
       }
       if (isMaster) {
-        println(s"$id sending $msg to slaves ($slaveSessions.values)")
+        log.debug(s"$id sending $msg to slaves ($slaveSessions.values)")
         slaveSessions.foreach(_.actor ! HostConnection.Message(TextMessage(msg)))
       }
     } else if (clientId >= clients.size && slaveSessions.size > 0) {
-      println("sending message to slave client")
+      log.debug(s"$id sending $msg to slave client $clientId")
 
       forwardMessageToSlave(clientId, msg)
     } else {
@@ -358,10 +358,10 @@ class HostConnection(
     msg.textStream.runForeach { text =>
       messageToHost(s"$clientId: $text")
 
-      println("message from client to host >> " + s"$clientId: $text")
+      log.debug("message from client to host >> " + s"$clientId: $text")
 
       if (isSlave) {
-        println("forwarding client message to master: " + s"$clientId: $text")
+        log.debug("forwarding client message to master: " + s"$clientId: $text")
         masterSession.actor ! HostConnection.Message(TextMessage(s"$clientId: $text"))
       }
     }
@@ -370,7 +370,7 @@ class HostConnection(
   def messageToHost(msg: String): Unit = messageToHost(TextMessage(msg))
 
   def messageToHost(msg: Message): Unit = {
-    if (dummy) println(s"[dummy-$id] message for host: $msg")
+    if (dummy) log.info(s"[dummy-$id] message for host: $msg")
     else {
       output ! msg
     }

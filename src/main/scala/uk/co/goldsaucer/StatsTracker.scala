@@ -27,7 +27,7 @@ class StatsTracker extends Actor with Logs {
       numHostsLookingToJoinSession = numHostsLookingToJoinSession + 1
       log.debug(s"host looking for session ($numHostsLookingToJoinSession)")
     case HostStoppedLookingForSession =>
-      numHostsLookingToJoinSession = math.min(numHostsLookingToJoinSession - 1, 0)
+      numHostsLookingToJoinSession = math.max(numHostsLookingToJoinSession - 1, 0)
       log.debug(s"host stopped looking for session ($numHostsLookingToJoinSession)")
   }
 }

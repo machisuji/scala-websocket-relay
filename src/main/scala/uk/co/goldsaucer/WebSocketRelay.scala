@@ -22,7 +22,7 @@ import akka.util.Timeout
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 
-object WebSocketRelay extends App {
+object WebSocketRelay extends App with Logs {
   implicit val system = ActorSystem()
   implicit val materializer = ActorMaterializer()
 
@@ -31,7 +31,7 @@ object WebSocketRelay extends App {
     keepAlive: Option[String] = None,
     secret: Option[String]
   ): Option[Flow[Message, Message, NotUsed]] = {
-    implicit val timeout = Timeout(1 second)
+    implicit val timeout = Timeout(1.second)
     import scala.concurrent.ExecutionContext.Implicits.global
     import akka.pattern.ask
 
@@ -68,11 +68,11 @@ object WebSocketRelay extends App {
       val flow = Flow.fromSinkAndSource(incomingMessages, outgoingMessages)
 
       keepAlive
-        .map(message => flow.keepAlive(30 seconds, () => TextMessage(message)))
+        .map(message => flow.keepAlive(30.seconds, () => TextMessage(message)))
         .orElse(Some(flow))
     }
 
-    Await.result(f.fallbackTo(Future { None }), 1 second)
+    Await.result(f.fallbackTo(Future { None }), 1.second)
   }
 
   def clientFlow(
@@ -81,7 +81,7 @@ object WebSocketRelay extends App {
     dummyFallback: Boolean = false,
     clientUUID: Option[String]
   ): Option[Flow[Message, Message, NotUsed]] = {
-    implicit val timeout = Timeout(1 second)
+    implicit val timeout = Timeout(1.second)
     import scala.concurrent.ExecutionContext.Implicits.global
 
     val _session = system
@@ -112,11 +112,11 @@ object WebSocketRelay extends App {
       val flow = Flow.fromSinkAndSource(incomingMessages, outgoingMessages)
 
       keepAlive
-        .map(message => flow.keepAlive(30 seconds, () => TextMessage(message)))
+        .map(message => flow.keepAlive(30.seconds, () => TextMessage(message)))
         .orElse(Some(flow))
     }
 
-    Await.result(flow.fallbackTo(Future { None }), 1 second)
+    Await.result(flow.fallbackTo(Future { None }), 1.second)
   }
 
   def getFile(fileName: String): Option[String] = {
@@ -194,7 +194,7 @@ object WebSocketRelay extends App {
   val serverBinding = Http().bindAndHandleSync(requestHandler, interface = "0.0.0.0", port = port)
 
   def shutdown(): Unit = {
-    println("\nShutting down relay ...")
+    log.info("\nShutting down relay ...")
 
     Thread.sleep(500)
 
@@ -208,7 +208,7 @@ object WebSocketRelay extends App {
 
   system.actorOf(Props(classOf[StatsTracker]), "stats-tracker") // start stats tracker
 
-  println(s"WebSocket Relay online at http://0.0.0.0:$port/")
+  log.info(s"WebSocket Relay online at http://0.0.0.0:$port/")
 
   sys.addShutdownHook(shutdown)
 }
