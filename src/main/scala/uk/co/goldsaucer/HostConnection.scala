@@ -78,6 +78,8 @@ class HostConnection(
     case OfferToJoin(masterSessionId, numClients) if allowSlave  => joinSession(masterSessionId, sender, numClients)
     case AcceptOffer(slaveSessionId, numClients)  if allowMaster => addSlave(slaveSessionId, sender, numClients)
     case ConfirmJoin(masterSessionId)             if allowSlave  => setMaster(masterSessionId, sender)
+
+    case stats: StatsTracker.Stats => showStats(stats)
   }
 
   def init(actor: ActorRef): Unit = {
@@ -85,6 +87,8 @@ class HostConnection(
 
     actor ! TextMessage("session: " + id)
     actor ! TextMessage("secret: " + secret)
+
+    StatsTracker.actorDo { _ ! StatsTracker.HostConnected }
   }
 
   def handleTakeOver(secret: String, sender: ActorRef): Unit = {
@@ -167,6 +171,7 @@ class HostConnection(
       case "/join-session slave" => lookForSession(master = false)
       case "/close-session" => closeSession()
       case "/leave-session" => leaveSession()
+      case "/stats" => StatsTracker.actorDo { _ ! StatsTracker.RequestStats }
       case _ => messageToHost("invalid")
     }
   }
@@ -219,6 +224,8 @@ class HostConnection(
       context.actorSelection(s"/user/session:*") ! RequestToJoin(id, clients.size)
     }
 
+    StatsTracker.actorDo { _ ! StatsTracker.HostLookingForSession }
+
     maxLocalClients = clients.size // don't allow any new clients to join once session joining is active
   }
 
@@ -264,6 +271,8 @@ class HostConnection(
     allowMaster = false
     allowSlave = false
     maxLocalClients = HostConnection.maxClients
+
+    StatsTracker.actorDo { _ ! StatsTracker.HostStoppedLookingForSession }
   }
 
   def handleJoinRequest(slaveSessionId: String, numClients: Int, sender: ActorRef): Unit = {
@@ -365,5 +374,17 @@ class HostConnection(
     else {
       output ! msg
     }
+  }
+
+  def showStats(stats: StatsTracker.Stats): Unit = {
+    val message =
+      s"""
+        | {
+        |   "numHostsOnline": ${stats.numHostsOnline},
+        |   "numHostsLookingForSession": ${stats.numHostsLookingToJoinSession}
+        | }
+      """.stripMargin
+
+    output ! TextMessage.Strict(message)
   }
 }

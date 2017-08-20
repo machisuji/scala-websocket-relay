@@ -206,6 +206,8 @@ object WebSocketRelay extends App {
       }
   }
 
+  system.actorOf(Props(classOf[StatsTracker]), "stats-tracker") // start stats tracker
+
   println(s"WebSocket Relay online at http://0.0.0.0:$port/")
 
   sys.addShutdownHook(shutdown)
