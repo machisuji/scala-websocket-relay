@@ -5,12 +5,12 @@ trait Logs {
 }
 
 class Log {
-  def debug(message: String): Unit = log(message, Log.Level.Debug)
-  def info(message: String): Unit = log(message, Log.Level.Info)
-  def warning(message: String): Unit = log(message, Log.Level.Warning)
-  def error(message: String): Unit = log(message, Log.Level.Error)
+  def debug(message: => String): Unit = log(message, Log.Level.Debug)
+  def info(message: => String): Unit = log(message, Log.Level.Info)
+  def warning(message: => String): Unit = log(message, Log.Level.Warning)
+  def error(message: => String): Unit = log(message, Log.Level.Error)
 
-  def log(message: String, level: Log.Level): Unit = {
+  def log(message: => String, level: Log.Level): Unit = {
     if (level.value >= Log.level.value) {
       logMessage(message, level)
     }
