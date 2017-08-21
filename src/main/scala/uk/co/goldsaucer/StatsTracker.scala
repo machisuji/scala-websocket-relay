@@ -61,10 +61,10 @@ object StatsTracker extends Logs {
   }
 
   trait Event {
-    def track: Unit = StatsTracker.actorDo(_ ! this)
+    def track(implicit context: ActorRefFactory): Unit = StatsTracker.actorDo(_ ! this)
   }
 
-  def !(message: Any): Unit = actorDo(_ ! message)
+  def !(message: Any)(implicit context: ActorRefFactory): Unit = actorDo(_ ! message)
 
   case object RequestStats extends Event
   case class Stats(
