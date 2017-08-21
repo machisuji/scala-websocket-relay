@@ -88,7 +88,7 @@ class HostConnection(
     actor ! TextMessage("session: " + id)
     actor ! TextMessage("secret: " + secret)
 
-    StatsTracker.actorDo { _ ! StatsTracker.HostConnected }
+    StatsTracker.HostConnected.track
   }
 
   def handleTakeOver(secret: String, sender: ActorRef): Unit = {
@@ -224,7 +224,7 @@ class HostConnection(
       context.actorSelection(s"/user/session:*") ! RequestToJoin(id, clients.size)
     }
 
-    StatsTracker.actorDo { _ ! StatsTracker.HostLookingForSession }
+    StatsTracker.HostLookingForSession.track
 
     maxLocalClients = clients.size // don't allow any new clients to join once session joining is active
   }
@@ -272,7 +272,7 @@ class HostConnection(
     allowSlave = false
     maxLocalClients = HostConnection.maxClients
 
-    StatsTracker.actorDo { _ ! StatsTracker.HostStoppedLookingForSession }
+    StatsTracker.HostStoppedLookingForSession.track
   }
 
   def handleJoinRequest(slaveSessionId: String, numClients: Int, sender: ActorRef): Unit = {

@@ -60,13 +60,19 @@ object StatsTracker extends Logs {
     sel.foreach(block)
   }
 
-  case object RequestStats
+  trait Event {
+    def track: Unit = StatsTracker.actorDo(_ ! this)
+  }
+
+  def !(message: Any): Unit = actorDo(_ ! message)
+
+  case object RequestStats extends Event
   case class Stats(
     numHostsOnline: Int,
     numHostsLookingToJoinSession: Int
-  )
+  ) extends Event
 
-  case object HostConnected
-  case object HostLookingForSession
-  case object HostStoppedLookingForSession
+  case object HostConnected extends Event
+  case object HostLookingForSession extends Event
+  case object HostStoppedLookingForSession extends Event
 }
