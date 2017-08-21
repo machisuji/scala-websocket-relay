@@ -238,5 +238,38 @@ class HostConnectionSpec() extends TestKit(ActorSystem("HostConnectionSpec")) wi
         masterOutput.expectMsg(TextMessage.Strict(s"disconnected: ${2 + clientId}"))
       }
     }
+
+    "track online hosts in" in {
+      StatsTracker.init()
+
+      val reader = TestProbe()
+
+      reader.send(StatsTracker.actor, StatsTracker.RequestStats)
+      reader.expectMsg(StatsTracker.Stats(numHostsOnline = 0, 0))
+
+      val session1 = createSession
+
+      reader.send(StatsTracker.actor, StatsTracker.RequestStats)
+      reader.expectMsg(StatsTracker.Stats(numHostsOnline = 1, 0))
+
+      val session2 = createSession
+
+      reader.send(StatsTracker.actor, StatsTracker.RequestStats)
+      reader.expectMsg(StatsTracker.Stats(numHostsOnline = 2, 0))
+
+      session1.actor ! "STOP!"
+
+      Thread.sleep(500)
+
+      reader.send(StatsTracker.actor, StatsTracker.RequestStats)
+      reader.expectMsg(StatsTracker.Stats(numHostsOnline = 1, 0))
+
+      session2.actor ! "STOP!"
+
+      Thread.sleep(500)
+
+      reader.send(StatsTracker.actor, StatsTracker.RequestStats)
+      reader.expectMsg(StatsTracker.Stats(numHostsOnline = 0, 0))
+    }
   }
 }

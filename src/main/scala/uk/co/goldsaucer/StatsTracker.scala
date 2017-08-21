@@ -1,6 +1,6 @@
 package uk.co.goldsaucer
 
-import akka.actor.{Actor, ActorContext, ActorRef, ActorRefFactory, ActorSystem, Terminated}
+import akka.actor.{Actor, ActorContext, ActorRef, ActorRefFactory, ActorSystem, Props, Terminated}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -36,6 +36,10 @@ object StatsTracker extends Logs {
   val actorName = "stats-tracker"
   val actorPath = "user/stats-tracker"
 
+  def init()(implicit system: ActorSystem): Unit = {
+    system.actorOf(Props(classOf[StatsTracker]), "stats-tracker") // start stats tracker
+  }
+
   def actor(implicit context: ActorRefFactory): ActorRef = {
     val fut = context.actorSelection(actorPath).resolveOne(1.second)
 
@@ -61,7 +65,8 @@ object StatsTracker extends Logs {
   }
 
   trait Event {
-    def track(implicit context: ActorRefFactory): Unit = StatsTracker.actorDo(_ ! this)
+    def track(implicit context: ActorRefFactory, sender: ActorRef = Actor.noSender): Unit =
+      StatsTracker.actorDo(_ ! this)
   }
 
   def !(message: Any)(implicit context: ActorRefFactory): Unit = actorDo(_ ! message)

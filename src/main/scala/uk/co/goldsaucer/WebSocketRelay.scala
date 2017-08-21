@@ -206,7 +206,7 @@ object WebSocketRelay extends App with Logs {
       }
   }
 
-  system.actorOf(Props(classOf[StatsTracker]), "stats-tracker") // start stats tracker
+  StatsTracker.init()
 
   log.info(s"WebSocket Relay online at http://0.0.0.0:$port/")
 
