@@ -103,7 +103,7 @@ object WebSocketRelay extends App with Logs {
         Flow[Message].to(Sink.actorRef[Message](client, PoisonPill))
 
       val outgoingMessages: Source[Message, NotUsed] =
-        Source.actorRef[Message](10, OverflowStrategy.fail)
+        Source.actorRef[Message](scala.sys.env.getOrElse("CLIENT_MESSAGE_BUFFER_SIZE", "100").toInt, OverflowStrategy.fail)
           .mapMaterializedValue { outActor =>
             client ! ClientConnection.Init(outActor)
             NotUsed
